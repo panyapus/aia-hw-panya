@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock P&L Dashboard</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6675;--line:#dfe3ea;--up:#0a7a43;--upbg:#dcf3e6;--down:#b3261e;--downbg:#fbe1de;--mix:#8a5a00;--mixbg:#fdf0cf;--accent:#2457d6;--bar:#3b6fe0;--bar2:#e0832f;--hover:#eef2fb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0f13;--card:#171a21;--ink:#eceff4;--mute:#9aa4b5;--line:#2a2f3a;--up:#4ad08a;--upbg:#12301f;--down:#ff8b82;--downbg:#3a1815;--mix:#f2c256;--mixbg:#3a2e0c;--accent:#7ea2ff;--bar:#5b8cff;--bar2:#f0954a;--hover:#1f2430}}
+:root[data-theme="dark"]{--bg:#0d0f13;--card:#171a21;--ink:#eceff4;--mute:#9aa4b5;--line:#2a2f3a;--up:#4ad08a;--upbg:#12301f;--down:#ff8b82;--downbg:#3a1815;--mix:#f2c256;--mixbg:#3a2e0c;--accent:#7ea2ff;--bar:#5b8cff;--bar2:#f0954a;--hover:#1f2430}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Sarabun","Noto Sans Thai",sans-serif}
+.wrap{max-width:1360px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0}
+h2{font-size:15px;margin:0 0 6px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sub{color:var(--mute);font-size:13px}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+input[type=search],select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.badge{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-up{background:var(--upbg);color:var(--up)}.b-down{background:var(--downbg);color:var(--down)}.b-mix{background:var(--mixbg);color:var(--mix)}
+.b-warn{background:var(--line);color:var(--mute)}
+.up{color:var(--up)}.down{color:var(--down)}
+a{color:var(--accent)}
+/* ตารางสรุปหน้าแรก: 1 หุ้น = 1 แถว */
+.tbl{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+.tr{display:grid;grid-template-columns:150px 62px 84px 64px 64px 84px 64px 64px 66px minmax(240px,1fr);gap:8px;padding:10px 12px;align-items:center;border-bottom:1px solid var(--line)}
+.tr:last-child{border-bottom:0}
+.th{color:var(--mute);font-size:12px;font-weight:600;background:var(--bg)}
+.th .s{cursor:pointer;user-select:none}
+.th .s:hover{color:var(--accent)}
+.tr.row{cursor:pointer}
+.tr.row:hover,.tr.row:focus{background:var(--hover);outline:0}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sym{font-size:17px;font-weight:700;color:var(--accent)}
+.sumtxt{font-size:13px;line-height:1.45}
+.sumtxt .src{display:block;color:var(--mute);font-size:11px;margin-top:2px}
+/* หน้า Detail */
+.exec{margin:12px 0}
+.exec ul{margin:6px 0 0;padding-left:18px}
+.exec li{margin:3px 0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.kpi .v{font-size:21px;font-weight:700;line-height:1.2}
+.kpi div{font-size:13px}
+.detail{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:start}
+.nums{display:grid;gap:10px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+.chart{padding:10px}
+.chart h3{margin:0 0 2px;font-size:12px;text-align:center;letter-spacing:.03em}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--mute);font-size:10px}
+.tw{overflow-x:auto;padding:8px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+th{color:var(--mute);font-weight:600}
+tr.t td{font-weight:700}
+details summary{cursor:pointer;color:var(--accent)}
+details ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+.empty{padding:20px 8px;text-align:center;color:var(--mute);font-size:13px}
+@media (max-width:1100px){.sumtxt{grid-column:1/-1}.tr{grid-template-columns:130px 56px 80px 60px 60px 80px 60px 60px 64px}}
+@media (max-width:820px){
+ .th{display:none}
+ .tr{grid-template-columns:1fr 1fr;gap:4px 12px}
+ .tr>*{min-width:0}
+ .tr .num::before{content:attr(data-l) " ";color:var(--mute);font-size:12px;float:left}
+ .tr .hd{grid-column:1/-1}
+ .detail{grid-template-columns:1fr}
+ .kpis{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="top">
+  <div>
+   <h1 id="title">Stock P&amp;L Dashboard</h1>
+   <div class="sub" id="subtitle"></div>
+  </div>
+  <button class="btn" id="theme" type="button">โหมดสว่าง/มืด</button>
+ </div>
+ <div id="app"></div>
+ <p class="sub" id="foot"></p>
+</div>
+<script>
+const DATA = {"rows": [{"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q3'24", "period_end": "2024-09-30", "basis": "งบ 3 เดือน", "revenue": 4435665, "cogs": 3115250, "gross_profit": 1320415, "other_income": 167705, "selling": 158265, "admin": 251337, "finance_cost": 1792, "ebt": 1023699, "tax": 47294, "net_profit": 976224, "ebit": 1025491, "unit": "พันบาท", "source_doc": "ITC_Q3-2025_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q4'24", "period_end": "2024-12-31", "basis": "คำนวณ (ปี − 9 เดือน)", "revenue": 4697766, "cogs": 3501920, "gross_profit": 1195846, "other_income": 184795, "selling": 160932, "admin": 367190, "finance_cost": 1446, "ebt": 839684, "tax": 49158, "net_profit": 790447, "ebit": 841130, "unit": "พันบาท", "source_doc": "ITC_Q4-2025_FS.zip (ทั้งปี) − ITC_Q3-2025_FS.zip (9 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q1'25", "period_end": "2025-03-31", "basis": "งบ 3 เดือน", "revenue": 4248645, "cogs": 3226732, "gross_profit": 1021913, "other_income": 153009, "selling": 144219, "admin": 316139, "finance_cost": 1345, "ebt": 692732, "tax": 15890, "net_profit": 676870, "ebit": 694077, "unit": "พันบาท", "source_doc": "ITC_Q1-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q2'25", "period_end": "2025-06-30", "basis": "งบ 3 เดือน", "revenue": 4473455, "cogs": 3353929, "gross_profit": 1119526, "other_income": 114119, "selling": 164131, "admin": 288665, "finance_cost": 1357, "ebt": 763355, "tax": 67298, "net_profit": 695956, "ebit": 764712, "unit": "พันบาท", "source_doc": "ITC_Q2-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q3'25", "period_end": "2025-09-30", "basis": "งบ 3 เดือน", "revenue": 4721140, "cogs": 3520762, "gross_profit": 1200378, "other_income": 111896, "selling": 175371, "admin": 308241, "finance_cost": 1591, "ebt": 852226, "tax": 40072, "net_profit": 812103, "ebit": 853817, "unit": "พันบาท", "source_doc": "ITC_Q3-2025_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q4'25", "period_end": "2025-12-31", "basis": "คำนวณ (ปี − 9 เดือน)", "revenue": 4780138, "cogs": 3545130, "gross_profit": 1235008, "other_income": 134189, "selling": 202158, "admin": 309693, "finance_cost": 5965, "ebt": 818290, "tax": 25491, "net_profit": 792989, "ebit": 824255, "unit": "พันบาท", "source_doc": "ITC_Q4-2025_FS.zip (ทั้งปี) − ITC_Q3-2025_FS.zip (9 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q1'26", "period_end": "2026-03-31", "basis": "งบ 3 เดือน", "revenue": 5173611, "cogs": 3915868, "gross_profit": 1257743, "other_income": 135876, "selling": 184566, "admin": 307994, "finance_cost": 1056, "ebt": 905810, "tax": 34637, "net_profit": 871273, "ebit": 906866, "unit": "พันบาท", "source_doc": "ITC_Q1-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q2'26", "period_end": "2026-06-30", "basis": "งบ 3 เดือน", "revenue": 4530124, "cogs": 3184115, "gross_profit": 1346009, "other_income": 155211, "selling": 245558, "admin": 297614, "finance_cost": 869, "ebt": 945047, "tax": 101056, "net_profit": 844094, "ebit": 945916, "unit": "พันบาท", "source_doc": "ITC_Q2-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "ITC", "name": "ไอ-เทล คอร์ปอเรชั่น", "sector": "Food & Beverage", "period": "Q3'26", "period_end": "2026-09-30", "basis": "งบ 3 เดือน", "revenue": 5177357, "cogs": 3884881, "gross_profit": 1292476, "other_income": 138924, "selling": 223602, "admin": 337458, "finance_cost": 778, "ebt": 820897, "tax": 65018, "net_profit": 755824, "ebit": 821675, "unit": "พันบาท", "source_doc": "ITC_Q3-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q3'24", "period_end": "2024-09-30", "basis": "งบ 3 เดือน", "revenue": 50840213, "cogs": 35164741, "gross_profit": 15675472, "other_income": 646801, "selling": 5183903, "admin": 2698877, "finance_cost": 5930406, "ebt": -795982, "tax": 29705, "net_profit": -810173, "ebit": 5134424, "unit": "พันบาท", "source_doc": "TRUE_Q3-2025_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q4'24", "period_end": "2024-12-31", "basis": "คำนวณ (ปี − 9 เดือน)", "revenue": 52742209, "cogs": 37299990, "gross_profit": 15442219, "other_income": 267102, "selling": 4965436, "admin": 2478883, "finance_cost": 5295804, "ebt": -7480462, "tax": 28845, "net_profit": -7507784, "ebit": -2184658, "unit": "พันบาท", "source_doc": "TRUE_Q4-2025_FS.zip (ทั้งปี) − TRUE_Q3-2025_FS.zip (9 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q1'25", "period_end": "2025-03-31", "basis": "งบ 3 เดือน", "revenue": 51435611, "cogs": 35602193, "gross_profit": 15833418, "other_income": 222215, "selling": 4744715, "admin": 2464598, "finance_cost": 5162625, "ebt": 1475086, "tax": -159921, "net_profit": 1633880, "ebit": 6637711, "unit": "พันบาท", "source_doc": "TRUE_Q1-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q2'25", "period_end": "2025-06-30", "basis": "งบ 3 เดือน", "revenue": 49596478, "cogs": 33919126, "gross_profit": 15677352, "other_income": 159758, "selling": 4662466, "admin": 2625871, "finance_cost": 5063229, "ebt": 1638739, "tax": -367837, "net_profit": 2031150, "ebit": 6701968, "unit": "พันบาท", "source_doc": "TRUE_Q2-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q3'25", "period_end": "2025-09-30", "basis": "งบ 3 เดือน", "revenue": 47229922, "cogs": 30700946, "gross_profit": 16528976, "other_income": 603212, "selling": 4837193, "admin": 2591190, "finance_cost": 5186121, "ebt": 1730272, "tax": 154549, "net_profit": 1572898, "ebit": 6916393, "unit": "พันบาท", "source_doc": "TRUE_Q3-2025_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q4'25", "period_end": "2025-12-31", "basis": "คำนวณ (ปี − 9 เดือน)", "revenue": 47406596, "cogs": 29842246, "gross_profit": 17564350, "other_income": 417816, "selling": 4956637, "admin": 2301898, "finance_cost": 5187772, "ebt": 2107300, "tax": -1786878, "net_profit": 4002535, "ebit": 7295072, "unit": "พันบาท", "source_doc": "TRUE_Q4-2025_FS.zip (ทั้งปี) − TRUE_Q3-2025_FS.zip (9 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q1'26", "period_end": "2026-03-31", "basis": "งบ 3 เดือน", "revenue": 46392890, "cogs": 28439530, "gross_profit": 17953360, "other_income": 478637, "selling": 4810289, "admin": 2445080, "finance_cost": 4756527, "ebt": 6917249, "tax": 318389, "net_profit": 6588720, "ebit": 11673776, "unit": "พันบาท", "source_doc": "TRUE_Q1-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q2'26", "period_end": "2026-06-30", "basis": "งบ 3 เดือน", "revenue": 45901032, "cogs": 27855560, "gross_profit": 18045472, "other_income": 336943, "selling": 4793340, "admin": 2369789, "finance_cost": 4708820, "ebt": 6563952, "tax": 23238, "net_profit": 6554129, "ebit": 11272772, "unit": "พันบาท", "source_doc": "TRUE_Q2-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}, {"symbol": "TRUE", "name": "ทรู คอร์ปอเรชั่น", "sector": "Technology / ICT", "period": "Q3'26", "period_end": "2026-09-30", "basis": "งบ 3 เดือน", "revenue": 46846756, "cogs": 28768890, "gross_profit": 18077866, "other_income": 528318, "selling": 4774935, "admin": 2591597, "finance_cost": 4548857, "ebt": 6828775, "tax": 186884, "net_profit": 6670089, "ebit": 11377632, "unit": "พันบาท", "source_doc": "TRUE_Q3-2026_FS.zip (งบกำไรขาดทุน 3 เดือน)", "source_url": "https://www.set.or.th/th/market/news-and-alert/news", "fetched_date": "2026-11-02", "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)"}], "notes": [{"symbol": "ITC", "period": "Q3'26", "topic": "รายได้", "note": "MD&A ระบุว่ารายได้โต 9.7% YoY จากความต้องการของลูกค้า การขยายฐานลูกค้า ผลิตภัณฑ์ใหม่ และขนมสัตว์เลี้ยง โดยตลาดสหรัฐฯ เป็นตัวขับเคลื่อนสำคัญ", "source_doc": "ITC_Q3-2026_MDA.pdf", "page": "2", "fetched_date": "2026-11-02"}, {"symbol": "ITC", "period": "Q3'26", "topic": "อัตรากำไรขั้นต้น", "note": "GPM Q3 อยู่ที่ 25.0% ส่วน Q2 สูงถึง 29.7% เพราะได้รับคืนภาษีนำเข้าสหรัฐฯ หากตัดผลนี้ออก GPM ปกติของ Q2 คือ 24.0% จึงถือว่า Q3 ดีขึ้นจากฐานปกติ", "source_doc": "ITC_Q3-2026_MDA.pdf", "page": "2-3", "fetched_date": "2026-11-02"}, {"symbol": "ITC", "period": "Q3'26", "topic": "กำไรสุทธิ", "note": "กำไรสุทธิ Q3 อยู่ที่ 756 ล้านบาท MD&A แยกให้ดูว่าหากไม่รวมค่าใช้จ่ายโครงการ Transformation กำไรปรับปรุงจะเป็น 876 ล้านบาท (ลด 5.5% YoY)", "source_doc": "ITC_Q3-2026_MDA.pdf", "page": "2-3", "fetched_date": "2026-11-02"}, {"symbol": "ITC", "period": "Q3'26", "topic": "เหตุการณ์สำคัญ", "note": "ประกาศซื้อกิจการ Phelps Pet Products ในสหรัฐฯ มูลค่ากิจการประมาณ 160 ล้านดอลลาร์สหรัฐ (ราว 5.4 พันล้านบาท) ใช้เงินทุนหมุนเวียนและเงินจาก IPO", "source_doc": "ITC_Q3-2026_MDA.pdf", "page": "3", "fetched_date": "2026-11-02"}, {"symbol": "TRUE", "period": "Q3'26", "topic": "กำไรสุทธิ", "note": "MD&A ระบุกำไรสุทธิ 6.7 พันล้านบาท สูงสุดนับตั้งแต่ควบรวมกิจการ และทำกำไรต่อเนื่องเป็นไตรมาสที่ 7 (ข้อความจาก PDF ตกหล่น ควรเทียบกับภาพหน้า PDF)", "source_doc": "TRUE_Q3-2026_MDA.pdf", "page": "3", "fetched_date": "2026-11-02"}, {"symbol": "TRUE", "period": "Q3'26", "topic": "รายได้", "note": "รายได้จากการให้บริการ 41.6 พันล้านบาท โต 0.9% YoY (มือถือ +2.8% ออนไลน์ +1.1% ทีวีบอกรับสมาชิก −34.1%) รายได้รวมลด 0.8% YoY (ข้อความจาก PDF ตกหล่น ควรเทียบกับภาพหน้า PDF)", "source_doc": "TRUE_Q3-2026_MDA.pdf", "page": "3", "fetched_date": "2026-11-02"}, {"symbol": "TRUE", "period": "Q3'26", "topic": "ต้นทุนและ EBITDA", "note": "ค่าใช้จ่ายดำเนินงานไม่รวมค่าเสื่อมราคาและค่าตัดจำหน่ายลด 9.5% YoY EBITDA เพิ่ม 5.7% YoY (ข้อความจาก PDF ตกหล่น ควรเทียบกับภาพหน้า PDF)", "source_doc": "TRUE_Q3-2026_MDA.pdf", "page": "3", "fetched_date": "2026-11-02"}, {"symbol": "ITC", "period": "Q3'26", "topic": "ความเห็นผู้สอบบัญชี", "note": "ไม่มีเงื่อนไข (ตามแบบ F45)", "source_doc": "ITC_Q3-2026_F45.pdf", "page": "1", "fetched_date": "2026-11-02"}, {"symbol": "TRUE", "period": "Q3'26", "topic": "ความเห็นผู้สอบบัญชี", "note": "ไม่มีเงื่อนไขและมีข้อสังเกต/เรื่องอื่น (ตามแบบ F45) ควรอ่านรายงานผู้สอบบัญชีประกอบ", "source_doc": "TRUE_Q3-2026_F45.pdf", "page": "1", "fetched_date": "2026-11-02"}, {"symbol": "ITC", "period": "Q3'26", "topic": "สรุปผู้บริหาร", "note": "รายได้โตต่อเนื่องจากลูกค้าสหรัฐฯ และสินค้าใหม่ แต่กำไรลดเพราะ GPM ลงจากฐาน Q2 ที่ได้คืนภาษีนำเข้า และมีค่าใช้จ่ายโครงการ Transformation (กำไรปรับปรุง −5.5% YoY)", "source_doc": "ITC_Q3-2026_MDA.pdf", "page": "2-3", "fetched_date": "2026-11-02"}, {"symbol": "TRUE", "period": "Q3'26", "topic": "สรุปผู้บริหาร", "note": "กำไรสูงสุดนับแต่ควบรวม (ต่อเนื่อง 7 ไตรมาส) จาก EBITDA +5.7% และค่าใช้จ่ายดำเนินงานลด 9.5% แม้รายได้รวม −0.8% จากทีวีบอกรับสมาชิกที่ลด 34.1%", "source_doc": "TRUE_Q3-2026_MDA.pdf", "page": "3", "fetched_date": "2026-11-02"}]};
+const rows = DATA.rows, notes = DATA.notes;
+const bySym = {};
+rows.forEach(r => (bySym[r.symbol] = bySym[r.symbol] || []).push(r));
+Object.values(bySym).forEach(a => a.sort((x, y) => x.period_end.localeCompare(y.period_end)));
+const syms = Object.keys(bySym);
+const globalLatest = rows.map(r => r.period_end).sort().pop();
+const T = s => new Date(s + 'T00:00:00Z').getTime();
+const DAY = 86400000;
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const fmt = (n, d = 1) => n == null ? '–' : (n / 1000).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const pct = (a, b) => (a == null || b == null || b === 0) ? null : (a - b) / Math.abs(b) * 100;
+const fp = p => p == null ? '–' : (p > 0 ? '+' : '') + p.toFixed(1) + '%';
+const cls = p => p == null ? '' : p >= 0 ? 'up' : 'down';
+const ratio = (a, b) => b ? a / b * 100 : null;
+const fr = p => p == null ? '–' : p.toFixed(1) + '%';
+
+function prevYear(list, r) { return list.find(x => Math.abs(T(x.period_end) - (T(r.period_end) - 365 * DAY)) < 5 * DAY); }
+function prevQ(list, r) { return list.find(x => { const d = T(r.period_end) - T(x.period_end); return d > 80 * DAY && d < 100 * DAY; }); }
+const sga = r => r.selling + r.admin;
+const other = r => r.ebt - (r.gross_profit + r.other_income - r.selling - r.admin - r.finance_cost);
+
+function drivers(a, b, n) {
+  const items = [
+    ['กำไรขั้นต้น', a.gross_profit - b.gross_profit],
+    ['รายได้อื่น', a.other_income - b.other_income],
+    ['ค่าใช้จ่ายขาย', -(a.selling - b.selling)],
+    ['ค่าใช้จ่ายบริหาร', -(a.admin - b.admin)],
+    ['ต้นทุนการเงิน', -(a.finance_cost - b.finance_cost)],
+    ['รายการอื่นในงบ', other(a) - other(b)],
+    ['ภาษี', -(a.tax - b.tax)],
+  ].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, n);
+  return items.map(([k, v]) => `${k} ${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 0)}`).join(', ');
+}
+const noteOf = (sym, period, topic) => notes.find(n => n.symbol === sym && n.period === period && n.topic === topic);
+
+function analyse(sym) {
+  const list = bySym[sym], cur = list[list.length - 1];
+  const py = prevYear(list, cur), pq = prevQ(list, cur);
+  const m = {
+    revY: py && pct(cur.revenue, py.revenue), revQ: pq && pct(cur.revenue, pq.revenue),
+    npY: py && pct(cur.net_profit, py.net_profit), npQ: pq && pct(cur.net_profit, pq.net_profit),
+  };
+  const known = [m.revY, m.revQ, m.npY, m.npQ].filter(v => v != null);
+  const pos = known.filter(v => v > 0).length;
+  const verdict = known.length < 4 ? ['ข้อมูลไม่ครบ', 'b-warn'] : pos === 4 ? ['ดี', 'b-up'] : pos === 0 ? ['แย่', 'b-down'] : ['ผสม', 'b-mix'];
+  const cautions = [];
+  if (m.npY != null && Math.abs(m.npY) > 100) cautions.push('% กำไร YoY สูงมากเพราะฐานปีก่อนต่ำ ควรดูจำนวนเงินประกอบ');
+  const aud = noteOf(sym, cur.period, 'ความเห็นผู้สอบบัญชี');
+  if (aud && aud.note.includes('ข้อสังเกต')) cautions.push('ผู้สอบบัญชีให้ความเห็นแบบมีข้อสังเกต/เรื่องอื่น ควรอ่านรายงานผู้สอบบัญชี');
+  const ex = noteOf(sym, cur.period, 'สรุปผู้บริหาร');
+  if (ex && sym === 'TRUE') cautions.push('ข้อความ MD&A ที่ดึงจาก PDF ตกหล่น ต้องเทียบภาพหน้า PDF');
+  return {sym, list, cur, py, pq, m, verdict, cautions, ex, stale: cur.period_end < globalLatest};
+}
+
+const state = {sector: 'ทั้งหมด', q: '', sort: 'npY', dir: -1};
+const app = document.getElementById('app');
+const COLS = [['sym', 'หุ้น'], ['per', 'งวด'], ['rev', 'รายได้ (ล้านบาท)'], ['revY', 'YoY'], ['revQ', 'QoQ'], ['np', 'กำไรสุทธิ (ล้านบาท)'], ['npY', 'YoY'], ['npQ', 'QoQ'], ['ver', 'สถานะ']];
+const sortVal = (i, k) => ({sym: i.sym, per: i.cur.period_end, rev: i.cur.revenue, revY: i.m.revY, revQ: i.m.revQ, np: i.cur.net_profit, npY: i.m.npY, npQ: i.m.npQ,
+  ver: ['ดี', 'ผสม', 'แย่', 'ข้อมูลไม่ครบ'].indexOf(i.verdict[0])})[k];
+
+function renderSummary() {
+  document.getElementById('title').textContent = 'สรุปผลประกอบการล่าสุด · Stock P&L';
+  const items = syms.map(analyse);
+  document.getElementById('subtitle').textContent = `${items.length} หุ้น · เทียบงวดเดียวกันปีก่อน (YoY) และไตรมาสก่อน (QoQ) · กดหัวคอลัมน์เพื่อเรียง กดแถวเพื่อดูรายละเอียด`;
+  const sectors = ['ทั้งหมด', ...new Set(items.map(i => i.cur.sector))];
+  app.innerHTML = '';
+  const c = el('div', 'controls');
+  const secSel = el('select'); secSel.setAttribute('aria-label', 'เลือก sector');
+  sectors.forEach(s => { const o = el('option', null, esc(s === 'ทั้งหมด' ? 'ทุก sector' : s)); o.value = s; if (s === state.sector) o.selected = true; secSel.appendChild(o); });
+  secSel.onchange = () => { state.sector = secSel.value; draw(); };
+  c.appendChild(secSel);
+  const q = el('input'); q.type = 'search'; q.placeholder = 'ค้นหาชื่อหุ้น'; q.value = state.q; q.oninput = () => { state.q = q.value; draw(); };
+  c.appendChild(q);
+  const cnt = el('span', 'sub'); c.appendChild(cnt);
+  app.appendChild(c);
+  const tbl = el('div', 'tbl'); app.appendChild(tbl);
+  const rule = el('div', 'sub', 'ป้ายสถานะ: <b>ดี</b> = รายได้และกำไรสุทธิโตทั้ง YoY และ QoQ · <b>แย่</b> = ลดทั้งหมด · <b>ผสม</b> = ที่เหลือ · คอลัมน์สรุปมาจาก MD&amp;A ของบริษัท ไม่เดาสาเหตุเพิ่ม');
+  rule.style.marginTop = '8px'; app.appendChild(rule);
+
+  function draw() {
+    tbl.innerHTML = '';
+    const f = items.filter(i => (state.sector === 'ทั้งหมด' || i.cur.sector === state.sector) && i.sym.toLowerCase().includes(state.q.trim().toLowerCase()));
+    f.sort((a, b) => {
+      const x = sortVal(a, state.sort), y = sortVal(b, state.sort);
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return state.dir * (typeof x === 'string' ? x.localeCompare(y) : x - y);
+    });
+    cnt.textContent = `แสดง ${f.length} / ${items.length} หุ้น`;
+    const head = el('div', 'tr th');
+    COLS.forEach(([k, l]) => {
+      const cell = el('div', (k === 'sym' || k === 'per' || k === 'ver') ? '' : 'num', `<span class="s">${esc(l)}${state.sort === k ? (state.dir < 0 ? ' ▼' : ' ▲') : ''}</span>`);
+      cell.firstChild.onclick = () => { if (state.sort === k) state.dir *= -1; else { state.sort = k; state.dir = k === 'sym' ? 1 : -1; } draw(); };
+      head.appendChild(cell);
+    });
+    head.appendChild(el('div', null, 'สรุปงบล่าสุด (จาก MD&amp;A)'));
+    tbl.appendChild(head);
+    if (!f.length) { tbl.appendChild(el('div', 'empty', 'ไม่พบหุ้นตามเงื่อนไข')); return; }
+    f.forEach(i => {
+      const r = el('div', 'tr row'); r.tabIndex = 0; r.setAttribute('role', 'link');
+      const go = () => { location.hash = '#/' + i.sym; };
+      r.onclick = e => { if (e.target.tagName !== 'A') go(); }; r.onkeydown = e => { if (e.key === 'Enter') go(); };
+      const n = (l, v, p) => `<div class="num ${cls(p)}" data-l="${l}">${v}</div>`;
+      const ex = i.ex;
+      r.innerHTML =
+        `<div class="hd"><div class="sym">${esc(i.sym)}</div><div class="sub">${esc(i.cur.name)}</div><div class="sub">${esc(i.cur.sector)}</div></div>` +
+        `<div>${esc(i.cur.period)}${i.stale ? '<div class="sub">ยังไม่ประกาศงวดล่าสุด</div>' : ''}</div>` +
+        `<div class="num" data-l="รายได้">${fmt(i.cur.revenue)}</div>${n('รายได้ YoY', fp(i.m.revY), i.m.revY)}${n('รายได้ QoQ', fp(i.m.revQ), i.m.revQ)}` +
+        `<div class="num" data-l="กำไรสุทธิ">${fmt(i.cur.net_profit)}</div>${n('กำไร YoY', fp(i.m.npY), i.m.npY)}${n('กำไร QoQ', fp(i.m.npQ), i.m.npQ)}` +
+        `<div><span class="badge ${i.verdict[1]}">${i.verdict[0]}</span></div>` +
+        `<div class="sumtxt">${ex ? esc(ex.note) + `<span class="src">ที่มา: ${esc(ex.source_doc)} หน้า ${esc(ex.page)}</span>` : '<span class="sub">ยังไม่มีสรุปจาก MD&amp;A ของงวดนี้</span>'}</div>`;
+      tbl.appendChild(r);
+    });
+  }
+  draw();
+}
+
+/* ---------- กราฟ ---------- */
+function barChart(title, series, periods) {
+  const W = 300, H = 160, pl = 34, pb = 24, pt = 8, pr = 6;
+  const all = series.flatMap(s => s.values).filter(v => v != null);
+  const mx = Math.max(0, ...all), mn = Math.min(0, ...all), span = (mx - mn) || 1;
+  const y = v => pt + (H - pt - pb) * (mx - v) / span;
+  const gw = (W - pl - pr) / periods.length, bw = Math.min(26, gw / (series.length + 0.8));
+  let g = `<line x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>`;
+  [mx, mn].forEach(v => { if (v !== 0) g += `<text x="${pl - 3}" y="${y(v) + 3}" text-anchor="end">${(v / 1000).toLocaleString('en-US', {maximumFractionDigits: 0})}</text>`; });
+  g += `<text x="${pl - 3}" y="${y(0) + 3}" text-anchor="end">0</text>`;
+  periods.forEach((p, i) => {
+    const cx = pl + gw * (i + 0.5);
+    g += `<text x="${cx}" y="${H - 8}" text-anchor="middle" style="font-size:8px">${esc(p)}</text>`;
+    series.forEach((s, k) => {
+      const v = s.values[i]; if (v == null) return;
+      const x = cx - bw * series.length / 2 + k * bw, y0 = y(0), y1 = y(v);
+      g += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${bw - 2}" height="${Math.max(1, Math.abs(y1 - y0))}" fill="${v < 0 ? 'var(--down)' : s.color}"><title>${esc(s.name)} ${esc(p)}: ${(v / 1000).toLocaleString('en-US', {maximumFractionDigits: 1})} ล้านบาท</title></rect>`;
+    });
+  });
+  const leg = series.length > 1 ? `<div class="sub" style="text-align:center">${series.map(s => `<span style="color:${s.color}">■</span> ${esc(s.name)}`).join(' &nbsp; ')}</div>` : '';
+  return `<div class="card chart"><h3>${esc(title)}</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${g}</svg>${leg}</div>`;
+}
+
+function lineChart(title, series, periods) {
+  const W = 300, H = 160, pl = 34, pb = 24, pt = 12, pr = 10;
+  const all = series.flatMap(s => s.values).filter(v => v != null);
+  const mx = Math.max(0, ...all), mn = Math.min(0, ...all), span = (mx - mn) || 1;
+  const y = v => pt + (H - pt - pb) * (mx - v) / span;
+  const gw = (W - pl - pr) / periods.length, X = i => pl + gw * (i + 0.5);
+  let g = `<line x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>`;
+  [mx, mn, 0].forEach(v => { g += `<text x="${pl - 3}" y="${y(v) + 3}" text-anchor="end">${v.toFixed(0)}%</text>`; });
+  periods.forEach((p, i) => { g += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" style="font-size:8px">${esc(p)}</text>`; });
+  series.forEach(s => {
+    const pts = s.values.map((v, i) => v == null ? null : [X(i), y(v), v]).filter(Boolean);
+    g += `<polyline fill="none" stroke="${s.color}" stroke-width="2" points="${pts.map(p => p[0] + ',' + p[1]).join(' ')}"/>`;
+    pts.forEach(p => { g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${s.color}"><title>${esc(s.name)}: ${p[2].toFixed(1)}%</title></circle><text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle">${p[2].toFixed(1)}%</text>`; });
+  });
+  const leg = series.length > 1 ? `<div class="sub" style="text-align:center">${series.map(s => `<span style="color:${s.color}">●</span> ${esc(s.name)}`).join(' &nbsp; ')}</div>` : '';
+  return `<div class="card chart"><h3>${esc(title)}</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${g}</svg>${leg}</div>`;
+}
+
+function seasonChart(L) {
+  const byYear = {};
+  L.forEach(r => { const y = r.period_end.slice(0, 4); (byYear[y] = byYear[y] || {})[r.period.slice(0, 2)] = r.revenue; });
+  const years = Object.keys(byYear).filter(y => ['Q1', 'Q2', 'Q3', 'Q4'].every(q => byYear[y][q] != null)).sort();
+  if (!years.length) return `<div class="card chart"><h3>SEASONAL SALE (%)</h3><div class="empty">ต้องมีรายได้ครบ Q1–Q4 ของปีเดียวกัน (ดูรายการไฟล์ที่ต้องเพิ่มในสรุป)</div></div>`;
+  const yr = years[years.length - 1], d = byYear[yr], tot = ['Q1', 'Q2', 'Q3', 'Q4'].reduce((s, q) => s + d[q], 0);
+  const cols = ['var(--bar)', 'var(--bar2)', '#8a8f9a', '#e2b52b'];
+  let a0 = -Math.PI / 2, g = '';
+  ['Q1', 'Q2', 'Q3', 'Q4'].forEach((q, k) => {
+    const a1 = a0 + d[q] / tot * 2 * Math.PI, R = 62, r = 34, cx = 100, cy = 80, big = a1 - a0 > Math.PI ? 1 : 0;
+    const p = (a, rr) => `${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)}`;
+    g += `<path d="M${p(a0, R)} A${R},${R} 0 ${big} 1 ${p(a1, R)} L${p(a1, r)} A${r},${r} 0 ${big} 0 ${p(a0, r)}Z" fill="${cols[k]}"><title>${q}/${yr}: ${(d[q] / tot * 100).toFixed(1)}%</title></path>`;
+    const am = (a0 + a1) / 2; g += `<text x="${cx + 48 * Math.cos(am)}" y="${cy + 48 * Math.sin(am) + 3}" text-anchor="middle" style="fill:#fff;font-weight:700">${(d[q] / tot * 100).toFixed(0)}%</text>`;
+    a0 = a1;
+  });
+  return `<div class="card chart"><h3>SEASONAL SALE (%) · ${yr}</h3><svg viewBox="0 0 200 160" role="img" aria-label="สัดส่วนรายได้รายไตรมาส">${g}</svg><div class="sub" style="text-align:center">Q1 Q2 Q3 Q4</div></div>`;
+}
+
+/* ---------- หน้า Detail: ซ้าย = ตัวเลข / ขวา = กราฟ ---------- */
+function renderDetail(sym) {
+  const a = analyse(sym), L = a.list, per = L.map(r => r.period), m = a.m;
+  document.getElementById('title').textContent = `${sym} · ${a.cur.name}`;
+  document.getElementById('subtitle').textContent = `${a.cur.sector} · งบล่าสุด ${a.cur.period} · ข้อมูลที่มี ${per.length} ไตรมาส (${per.join(', ')}) · หน่วยล้านบาท`;
+  app.innerHTML = '';
+  const back = el('button', 'btn', '← กลับหน้าสรุป'); back.type = 'button'; back.onclick = () => { location.hash = '#/'; }; app.appendChild(back);
+
+  // สรุปสำหรับผู้บริหาร (กระชับ)
+  const b1 = `รายได้ <b class="${cls(m.revY)}">${fp(m.revY)}</b> YoY / <b class="${cls(m.revQ)}">${fp(m.revQ)}</b> QoQ · กำไรสุทธิ <b class="${cls(m.npY)}">${fp(m.npY)}</b> YoY / <b class="${cls(m.npQ)}">${fp(m.npQ)}</b> QoQ (${fmt(a.cur.net_profit)} ล้านบาท)`;
+  const b2 = (a.py ? `ต่อกำไร YoY: ${drivers(a.cur, a.py, 2)} ล้านบาท` : '') + (a.pq ? ` · ต่อกำไร QoQ: ${drivers(a.cur, a.pq, 2)} ล้านบาท` : '');
+  const b3 = a.ex ? `${esc(a.ex.note)} <span class="sub">[${esc(a.ex.source_doc)} หน้า ${esc(a.ex.page)}]</span>` : 'ยังไม่มีสรุปจาก MD&amp;A';
+  const exec = el('div', 'card exec',
+    `<h2><span class="badge ${a.verdict[1]}">${a.verdict[0]}</span> สรุปสำหรับผู้บริหาร · ${esc(a.cur.period)}</h2><ul>` +
+    `<li><b>ผลลัพธ์:</b> ${b1}</li><li><b>ปัจจัยจากงบ (ล้านบาท):</b> ${esc(b2)}</li><li><b>เหตุผลจาก MD&amp;A:</b> ${b3}</li>` +
+    (a.cautions.length ? `<li><b>ข้อควรระวัง:</b> ${a.cautions.map(esc).join(' · ')}</li>` : '') + `</ul>`);
+  app.appendChild(exec);
+
+  const k = (l, v, p, q) => `<div class="card kpi"><div class="sub">${l}</div><div class="v">${fmt(v)}</div><div class="${cls(p)}">YoY ${fp(p)}</div><div class="${cls(q)}">QoQ ${fp(q)}</div></div>`;
+  const P = f => ({y: a.py && pct(f(a.cur), f(a.py)), q: a.pq && pct(f(a.cur), f(a.pq))});
+  const kp = [['รายได้', r => r.revenue], ['กำไรขั้นต้น', r => r.gross_profit], ['SG&A', sga], ['กำไรสุทธิ', r => r.net_profit]];
+  app.appendChild(el('div', 'kpis', kp.map(([l, f]) => k(l, f(a.cur), P(f).y, P(f).q)).join('')));
+
+  const grid = el('div', 'detail');
+  const left = el('div', 'nums');
+  const th = extra => `<tr><th>ล้านบาท</th>${L.map(r => `<th title="${esc(r.source_doc)} · ดึงเมื่อ ${esc(r.fetched_date)}">${esc(r.period)}${r.basis.startsWith('คำนวณ') ? '*' : ''}</th>`).join('')}${extra}</tr>`;
+  const line = (label, f, bold) => {
+    const yo = a.py && pct(f(a.cur), f(a.py)), qo = a.pq && pct(f(a.cur), f(a.pq));
+    return `<tr class="${bold ? 't' : ''}"><td>${label}</td>${L.map(r => `<td>${fmt(f(r))}</td>`).join('')}<td class="${cls(yo)}">${fp(yo)}</td><td class="${cls(qo)}">${fp(qo)}</td></tr>`;
+  };
+  const metricRows = [['GPM', r => ratio(r.gross_profit, r.revenue)], ['%EBIT', r => ratio(r.ebit, r.revenue)], ['NPM', r => ratio(r.net_profit, r.revenue)],
+    ['SG&A %', r => ratio(sga(r), r.revenue)], ['%SELLING', r => ratio(r.selling, r.revenue)], ['%ADMIN', r => ratio(r.admin, r.revenue)],
+    ['%INTEREST/EBIT', r => ratio(r.finance_cost, r.ebit)], ['%TAX/EBT', r => ratio(r.tax, r.ebt)]];
+  left.innerHTML =
+    `<div class="card tw"><table>${th('<th>%YoY</th><th>%QoQ</th>')}` +
+    line('SALE', r => r.revenue, true) + line('COGS', r => r.cogs) + line('GROSS PROFIT', r => r.gross_profit, true) +
+    line('SELLING', r => r.selling) + line('ADMIN', r => r.admin) + line('SG&A', sga, true) +
+    line('EBIT¹', r => r.ebit, true) + line('INTEREST', r => r.finance_cost) + line('EBT', r => r.ebt, true) +
+    line('TAX', r => r.tax) + line('NET PROFIT', r => r.net_profit, true) + `</table></div>` +
+    `<div class="card tw"><table>${th('<th>YoY (จุด)</th><th>QoQ (จุด)</th>')}` +
+    metricRows.map(([lab, f]) => {
+      const d = (x, y) => (x && y && f(x) != null && f(y) != null) ? f(x) - f(y) : null;
+      const yo = d(a.cur, a.py), qo = d(a.cur, a.pq), s = v => v == null ? '–' : (v > 0 ? '+' : '') + v.toFixed(1);
+      return `<tr><td>${lab}</td>${L.map(r => `<td>${fr(f(r))}</td>`).join('')}<td class="${cls(yo)}">${s(yo)}</td><td class="${cls(qo)}">${s(qo)}</td></tr>`;
+    }).join('') + `</table></div>` +
+    `<div class="card"><details><summary>ที่มาของตัวเลขและสรุปจาก MD&amp;A</summary><ul>` +
+    [...new Set(L.map(r => r.source_doc + ' · ดึงเมื่อ ' + r.fetched_date))].map(s => `<li>${esc(s)}</li>`).join('') +
+    `<li><a href="${esc(a.cur.source_url)}" target="_blank" rel="noopener">หน้าข่าวหลักทรัพย์ SET</a> (ค้นหาข่าวงบของ ${esc(sym)})</li>` +
+    notes.filter(n => n.symbol === sym && n.topic !== 'สรุปผู้บริหาร').map(n => `<li><b>${esc(n.topic)} (${esc(n.period)}):</b> ${esc(n.note)} [${esc(n.source_doc)} หน้า ${esc(n.page)}]</li>`).join('') +
+    `</ul><div class="sub" style="margin-top:6px">¹ EBIT = กำไรก่อนภาษี + ต้นทุนการเงิน คำนวณเองจากงบ (รวมรายได้อื่นและส่วนแบ่งกำไร) · * Q4 ไม่มีงบ 3 เดือน คำนวณจากงบทั้งปี − งบ 9 เดือน (กำไรสุทธิตรงกับ F45) · sector: ${esc(a.cur.sector_source)}</div></details></div>`;
+
+  const right = el('div', 'charts');
+  right.innerHTML =
+    barChart('SALE', [{name: 'รายได้', values: L.map(r => r.revenue), color: 'var(--bar)'}], per) +
+    barChart('GROSS PROFIT', [{name: 'กำไรขั้นต้น', values: L.map(r => r.gross_profit), color: 'var(--bar)'}], per) +
+    barChart('SG&A', [{name: 'ขาย', values: L.map(r => r.selling), color: 'var(--bar)'}, {name: 'บริหาร', values: L.map(r => r.admin), color: 'var(--bar2)'}], per) +
+    barChart('NET PROFIT', [{name: 'กำไรสุทธิ', values: L.map(r => r.net_profit), color: 'var(--bar)'}], per) +
+    seasonChart(L) +
+    lineChart('GPM (%)', [{name: 'GPM', values: L.map(r => ratio(r.gross_profit, r.revenue)), color: 'var(--bar)'}], per) +
+    lineChart('SG&A (%)', [{name: '%Selling', values: L.map(r => ratio(r.selling, r.revenue)), color: 'var(--bar)'}, {name: '%Admin', values: L.map(r => ratio(r.admin, r.revenue)), color: 'var(--bar2)'}], per) +
+    lineChart('NPM (%)', [{name: 'NPM', values: L.map(r => ratio(r.net_profit, r.revenue)), color: 'var(--bar)'}], per);
+  grid.appendChild(left); grid.appendChild(right);
+  app.appendChild(grid);
+}
+
+function route() {
+  const h = location.hash.replace(/^#\/?/, '');
+  if (h && bySym[h]) renderDetail(h); else renderSummary();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+document.getElementById('theme').onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+};
+document.getElementById('foot').textContent = 'ข้อมูลจาก F45 / งบการเงิน / MD&A ที่บริษัทแจ้งผ่าน SET · ใช้เพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน';
+route();
+</script>
+</body>
+</html>
