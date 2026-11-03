@@ -36,6 +36,7 @@ STOCKS = {
 SPEC = {
     "ITC": [
         ("Q3-2026", "3M", "PL_One Statement- 1 steps", [("Q3'26", "2026-09-30"), ("Q3'25", "2025-09-30")]),
+        ("Q3-2026", "9M", "PL_One Statement- 1 steps 9M", [("9M'26", ""), ("9M'25", "")]),
         ("Q2-2026", "3M", "PL_One Statement- 1 steps", [("Q2'26", "2026-06-30"), ("Q2'25", "2025-06-30")]),
         ("Q1-2026", "3M", "PL_One Statement- 1 steps", [("Q1'26", "2026-03-31"), ("Q1'25", "2025-03-31")]),
         ("Q3-2025", "3M", "PL_One Statement- 1 steps 3M", [("Q3'25", "2025-09-30"), ("Q3'24", "2024-09-30")]),
@@ -44,6 +45,7 @@ SPEC = {
     ],
     "TRUE": [
         ("Q3-2026", "3M", "thai 5-6 (3M)", [("Q3'26", "2026-09-30"), ("Q3'25", "2025-09-30")]),
+        ("Q3-2026", "9M", "thai 7-8 (9M)", [("9M'26", ""), ("9M'25", "")]),
         ("Q2-2026", "3M", "thai 5-6 (3M)", [("Q2'26", "2026-06-30"), ("Q2'25", "2025-06-30")]),
         ("Q1-2026", "3M", "thai 5-6 (3M)", [("Q1'26", "2026-03-31"), ("Q1'25", "2025-03-31")]),
         ("Q3-2025", "3M", "thai 5-6(3M)", [("Q3'25", "2025-09-30"), ("Q3'24", "2024-09-30")]),
@@ -70,9 +72,9 @@ FLOW = list(LABELS)  # ทุกฟิลด์เป็นยอดสะสม
 # กำไรสุทธิส่วนของบริษัทใหญ่ จากแบบ F45 (พันบาท) ใช้ตรวจตัวเลขจากงบ FS
 F45 = {
     "ITC": {"Q3'26": 755824, "Q3'25": 812103, "Q2'26": 844094, "Q2'25": 695956, "Q1'26": 871273, "Q1'25": 676870,
-            "Q3'24": 976224, "9M'25": 2184929, "9M'24": 2806814, "FY25": 2977918, "FY24": 3597261},
+            "Q3'24": 976224, "9M'26": 2471191, "9M'25": 2184929, "9M'24": 2806814, "FY25": 2977918, "FY24": 3597261},
     "TRUE": {"Q3'26": 6670089, "Q3'25": 1572898, "Q2'26": 6554129, "Q2'25": 2031150, "Q1'26": 6588720, "Q1'25": 1633880,
-             "Q3'24": -810173, "9M'25": 5237926, "9M'24": -3458075, "FY25": 9240461, "FY24": -10965859},
+             "Q3'24": -810173, "9M'26": 19812938, "9M'25": 5237926, "9M'24": -3458075, "FY25": 9240461, "FY24": -10965859},
 }
 # F45 งวดสะสม 6 เดือนของ Q2 ใช้ตรวจว่า Q1 + Q2 = ครึ่งปี
 F45_H1 = {"ITC": {"26": 1715367, "25": 1372826}, "TRUE": {"26": 13142849, "25": 3665029}}
@@ -143,6 +145,8 @@ def close(a, b, tol=1.5):
 
 def main():
     out_rows = []
+    dup_checked = {}
+    checked_lines = {}
     for sym, info in STOCKS.items():
         obs = {}  # period -> (values, source_doc, own)
         for tag, kind, sheet, periods in SPEC[sym]:
@@ -161,8 +165,10 @@ def main():
                 own = (i == 0)  # คอลัมน์ปีปัจจุบันของไฟล์นั้น = งวดของไฟล์เอง
                 if period in obs:
                     old, _, old_own = obs[period]
-                    if not close(old["net_profit"], d["net_profit"]):
-                        print(f"คำเตือน {sym} {period}: กำไรสุทธิในไฟล์ต่างกัน ({old['net_profit']} vs {d['net_profit']}) ใช้ของไฟล์งวดนั้นเอง")
+                    diffs = [k for k in FLOW if not close(old[k], d[k], 3)]
+                    dup_checked[sym] = dup_checked.get(sym, 0) + 1
+                    if diffs:
+                        print(f"คำเตือน {sym} {period}: ตัวเลขในสองไฟล์ต่างกัน {diffs} (อาจมีการจัดประเภทใหม่) ใช้ของไฟล์งวดนั้นเอง")
                     if own and not old_own:
                         obs[period] = (d, src, own)
                 else:
@@ -191,6 +197,15 @@ def main():
             if not close(h1, F45_H1[sym][yy], 2.5):
                 sys.exit(f"{sym} Q1+Q2 ปี {yy}: {h1} ไม่ตรง F45 6 เดือน {F45_H1[sym][yy]}")
         q9 = sum(obs[f"Q{n}'25"][0]["net_profit"] for n in (1, 2, 3))
+        for yy in ("26", "25"):
+            bad = []
+            for k in FLOW:
+                total = sum(obs[f"Q{n}'{yy}"][0][k] for n in (1, 2, 3))
+                if not close(total, obs[f"9M'{yy}"][0][k], 3):
+                    bad.append(f"{k} {total:.0f} vs {obs[f'9M{chr(39)}{yy}'][0][k]:.0f}")
+            checked_lines[sym] = checked_lines.get(sym, 0) + len(FLOW) - len(bad)
+            if bad:
+                print(f"คำเตือน {sym} ปี {yy}: Q1+Q2+Q3 ไม่เท่ากับ 9 เดือน → {bad}")
         nine = F45[sym]["9M'25"]
         if not close(q9, nine, 2.5):
             sys.exit(f"{sym} Q1+Q2+Q3 ปี 25: {q9} ไม่ตรง F45 9 เดือน {nine}")
@@ -213,11 +228,24 @@ def main():
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(out_rows)
-    print(f"เขียน output/data.csv {len(out_rows)} แถว (กำไรสุทธิตรง F45 ทุกแถว และ Q1+Q2+Q3 = 9 เดือน)")
+    print(f"เขียน output/data.csv {len(out_rows)} แถว (กำไรสุทธิตรง F45 ทุกแถว) · ตรวจ Q1+Q2+Q3 = 9 เดือน ผ่าน {checked_lines} บรรทัด · เทียบงวดซ้ำ {dup_checked}")
 
     notes = list(csv.DictReader(open(OUT / "mdna_notes.csv", encoding="utf-8-sig")))
+    # กำไรสุทธิปรับปรุง ตามนิยามของแต่ละบริษัท (จาก MD&A) ตรวจว่า รายงาน + รายการที่ตัดออก = ปรับปรุง
+    adj = list(csv.DictReader(open(OUT / "adjusted_profit.csv", encoding="utf-8-sig")))
+    reported = {(r["symbol"], r["period"]): r["net_profit"] / 1000 for r in out_rows}
+    for a in adj:
+        key = (a["symbol"], a["period"])
+        if key not in reported:
+            sys.exit(f"adjusted_profit.csv: ไม่มีงวด {key} ใน data.csv")
+        if a["excluded_mb"] and abs(reported[key] + float(a["excluded_mb"]) - float(a["adj_net_profit_mb"])) > 1.5:
+            sys.exit(f"{key}: รายงาน {reported[key]:.0f} + ตัดออก {a['excluded_mb']} ไม่เท่ากับปรับปรุง {a['adj_net_profit_mb']}")
+        if float(a["adj_net_profit_mb"]) < reported[key] - 5:
+            # เป็นไปได้เมื่อรายการพิเศษที่ตัดออกเป็นกำไร (เช่น ผลบวกครั้งเดียว) จึงไม่ถือว่าผิด แต่ให้ตรวจกับ MD&A
+            print(f"หมายเหตุ {key}: กำไรปรับปรุงต่ำกว่ากำไรที่รายงาน ให้ตรวจว่าตรงกับ MD&A (รายการพิเศษที่ตัดออกเป็นกำไร)")
+    print(f"ตรวจกำไรสุทธิปรับปรุง {len(adj)} รายการ (ที่มีรายการที่ตัดออก: รายงาน + ตัดออก = ปรับปรุงตรงทุกรายการ)")
     tpl = (ROOT / "scripts" / "dashboard_template.html").read_text(encoding="utf-8")
-    payload = json.dumps({"rows": out_rows, "notes": notes}, ensure_ascii=False)
+    payload = json.dumps({"rows": out_rows, "notes": notes, "adj": adj}, ensure_ascii=False)
     (OUT / "dashboard.html").write_text(tpl.replace("/*__DATA__*/null", payload), encoding="utf-8")
     print("เขียน output/dashboard.html")
 
