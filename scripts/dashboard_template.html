@@ -46,8 +46,8 @@ a{color:var(--accent)}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
 .kpi .v{font-size:21px;font-weight:700;line-height:1.2}
 .kpi div{font-size:13px}
-.detail{display:grid;grid-template-columns:fit-content(68%) minmax(0,1fr);gap:12px;align-items:start}
-.nums{display:grid;gap:10px;min-width:0}
+.detail{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}
+.nums{display:grid;gap:10px;min-width:0;container-type:inline-size}
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start}
 .chart{padding:10px 10px 8px}
 .chart .u{font-weight:400;color:var(--mute);font-size:11px;letter-spacing:0}
@@ -57,8 +57,8 @@ a{color:var(--accent)}
 svg{width:100%;height:auto;display:block}
 svg text{fill:var(--mute);font-size:10px}
 .tw{overflow-x:auto;padding:6px 8px}
-table{border-collapse:collapse;width:100%;font-size:clamp(9.5px,.9vw,12.5px);font-variant-numeric:tabular-nums}
-th,td{padding:3px .3em;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:clamp(7px,1.4cqw,12.5px);font-variant-numeric:tabular-nums}
+th,td{padding:3px .25em;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
 th:first-child,td:first-child{text-align:left;padding-left:.2em;padding-right:.6em}
 td[title],th[title]{cursor:help}
 td[title]:hover{background:var(--hover)}
@@ -67,7 +67,21 @@ tr.t td{font-weight:700}
 details summary{cursor:pointer;color:var(--accent)}
 details ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 .empty{padding:20px 8px;text-align:center;color:var(--mute);font-size:13px}
-@media (max-width:1100px){.sumtxt{grid-column:1/-1}.tr{grid-template-columns:130px 56px 80px 60px 60px 80px 60px 60px 64px}}
+.tabs{display:flex;gap:6px}
+.tab{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 14px;cursor:pointer}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.calllink{font-size:12px;display:inline-block;margin-top:2px}
+.gt td,.gt th{white-space:normal;text-align:left;vertical-align:top}
+.gt td:first-child,.gt th:first-child{position:static;min-width:170px}
+.chg{display:inline-block;border-radius:6px;padding:0 8px;font-size:12px;font-weight:600;white-space:nowrap}
+.qa details{border:1px solid var(--line);border-radius:10px;background:var(--card);margin:6px 0;padding:8px 12px}
+.qa summary{cursor:pointer;font-weight:600}
+.qa summary .meta{font-weight:400;color:var(--mute);font-size:12px}
+.qa .body{margin-top:8px;font-size:14px}
+.qa .body p{margin:6px 0}
+.qa .flag{font-size:12px;background:var(--mixbg);color:var(--mix);border-radius:6px;padding:2px 8px;display:inline-block}
+.stack>.card{margin-bottom:12px}
+@media (max-width:1100px){.detail{grid-template-columns:1fr}.sumtxt{grid-column:1/-1}.tr{grid-template-columns:130px 56px 80px 60px 60px 80px 60px 60px 64px}}
 @media (max-width:820px){
  .charts{grid-template-columns:1fr}
  .th{display:none}
@@ -94,7 +108,8 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 </div>
 <script>
 const DATA = /*__DATA__*/null;
-const rows = DATA.rows, notes = DATA.notes, adjRows = DATA.adj || [];
+const rows = DATA.rows, notes = DATA.notes, adjRows = DATA.adj || [], calls = DATA.calls || [];
+const callOf = sym => calls.find(c => c.symbol === sym);
 const bySym = {};
 rows.forEach(r => (bySym[r.symbol] = bySym[r.symbol] || []).push(r));
 Object.values(bySym).forEach(a => a.sort((x, y) => x.period_end.localeCompare(y.period_end)));
@@ -127,7 +142,10 @@ function drivers(a, b, n) {
   ].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, n);
   return items.map(([k, v]) => `${k} ${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 0)}`).join(', ');
 }
-const adjOf = (sym, period) => adjRows.find(a => a.symbol === sym && a.period === period);
+const adjUnit = a => a.unit || 'ล้านบาท';
+const adjOf = (sym, period, unit = 'ล้านบาท') => adjRows.find(a => a.symbol === sym && a.period === period && adjUnit(a) === unit && a.adj_net_profit_mb !== '');
+const adjNone = sym => adjRows.find(a => a.symbol === sym && a.adj_net_profit_mb === '');   // บริษัทไม่เปิดเผยกำไรปรับปรุง
+const hasAdj = (sym, unit) => adjRows.some(a => a.symbol === sym && adjUnit(a) === unit && a.adj_net_profit_mb !== '');
 const noteOf = (sym, period, topic) => notes.find(n => n.symbol === sym && n.period === period && n.topic === topic);
 
 function analyse(sym) {
@@ -142,6 +160,7 @@ function analyse(sym) {
   const verdict = known.length < 4 ? ['ข้อมูลไม่ครบ', 'b-warn'] : pos === 4 ? ['ดี', 'b-up'] : pos === 0 ? ['แย่', 'b-down'] : ['ผสม', 'b-mix'];
   const cautions = [];
   if (m.npY != null && Math.abs(m.npY) > 100) cautions.push('% กำไร YoY สูงมากเพราะฐานปีก่อนต่ำ ควรดูจำนวนเงินประกอบ');
+  if (cur.mapping_note) cautions.push('ต้นทุน/GPM จัดกลุ่มตามธุรกิจ (ดู tooltip ที่บรรทัด COGS) เทียบกับหุ้นทั่วไปไม่ได้');
   const aud = noteOf(sym, cur.period, 'ความเห็นผู้สอบบัญชี');
   if (aud && aud.note.includes('ข้อสังเกต')) cautions.push('ผู้สอบบัญชีให้ความเห็นแบบมีข้อสังเกต/เรื่องอื่น ควรอ่านรายงานผู้สอบบัญชี');
   const ex = noteOf(sym, cur.period, 'สรุปผู้บริหาร');
@@ -199,7 +218,7 @@ function renderSummary() {
       const n = (l, v, p) => `<div class="num ${cls(p)}" data-l="${l}">${v}</div>`;
       const ex = i.ex;
       r.innerHTML =
-        `<div class="hd"><div class="sym">${esc(i.sym)}</div><div class="sub">${esc(i.cur.name)}</div><div class="sub">${esc(i.cur.sector)}</div></div>` +
+        `<div class="hd"><div class="sym">${esc(i.sym)}</div><div class="sub">${esc(i.cur.name)}</div><div class="sub">${esc(i.cur.sector)}</div><a class="calllink" href="#/call/${esc(i.sym)}">Earning call ›</a></div>` +
         `<div>${esc(i.cur.period)}${i.stale ? '<div class="sub">ยังไม่ประกาศงวดล่าสุด</div>' : ''}</div>` +
         `<div class="num" data-l="รายได้">${fmt(i.cur.revenue)}</div>${n('รายได้ YoY', fp(i.m.revY), i.m.revY)}${n('รายได้ QoQ', fp(i.m.revQ), i.m.revQ)}` +
         `<div class="num" data-l="กำไรสุทธิ">${fmt(i.cur.net_profit)}</div>${n('กำไร YoY', fp(i.m.npY), i.m.npY)}${n('กำไร QoQ', fp(i.m.npQ), i.m.npQ)}` +
@@ -297,14 +316,22 @@ function renderDetail(sym) {
   document.getElementById('title').textContent = `${sym} · ${a.cur.name}`;
   document.getElementById('subtitle').textContent = `${a.cur.sector} · งบล่าสุด ${a.cur.period} · ข้อมูลที่มี ${per.length} ไตรมาส (${per.join(', ')}) · หน่วยล้านบาท · เอาเมาส์ชี้ตัวเลขในตารางเพื่อดูสูตรและที่มา`;
   app.innerHTML = '';
-  const back = el('button', 'btn', '← กลับหน้าสรุป'); back.type = 'button'; back.onclick = () => { location.hash = '#/'; }; app.appendChild(back);
+  app.appendChild(navBar(sym, 'detail'));
 
   // สรุปสำหรับผู้บริหาร (กระชับ)
   const b1 = `รายได้ <b class="${cls(m.revY)}">${fp(m.revY)}</b> YoY / <b class="${cls(m.revQ)}">${fp(m.revQ)}</b> QoQ · กำไรสุทธิ <b class="${cls(m.npY)}">${fp(m.npY)}</b> YoY / <b class="${cls(m.npQ)}">${fp(m.npQ)}</b> QoQ (${fmt(a.cur.net_profit)} ล้านบาท)`;
   const b2 = (a.py ? `ต่อกำไร YoY: ${drivers(a.cur, a.py, 2)} ล้านบาท` : '') + (a.pq ? ` · ต่อกำไร QoQ: ${drivers(a.cur, a.pq, 2)} ล้านบาท` : '');
-  const ac = adjOf(sym, a.cur.period), apy = a.py && adjOf(sym, a.py.period), apq = a.pq && adjOf(sym, a.pq.period);
-  const av = x => x ? parseFloat(x.adj_net_profit_mb) : null, acv = av(ac);
-  const adjTxt = acv == null ? '' : `กำไรสุทธิปรับปรุง (นิยามบริษัท) ${acv.toLocaleString('en-US')} ล้านบาท เทียบที่รายงาน ${fmt(a.cur.net_profit, 0)} · YoY ${fp(av(apy) != null && av(apy) > 0 ? (acv - av(apy)) / av(apy) * 100 : null)} · QoQ ${fp(av(apq) != null && av(apq) > 0 ? (acv - av(apq)) / av(apq) * 100 : null)}`;
+  const adjParts = [];
+  [['ล้านบาท', 0, a.cur.net_profit / 1000], ['ล้านเหรียญสหรัฐ', 2, null]].forEach(([unit, dp, repBaht]) => {
+    const c = adjOf(sym, a.cur.period, unit); if (!c) return;
+    const pv = x => x ? parseFloat(x.adj_net_profit_mb) : null, cv = pv(c);
+    const yv = a.py ? pv(adjOf(sym, a.py.period, unit)) : null, qv = a.pq ? pv(adjOf(sym, a.pq.period, unit)) : null;
+    const rep = c.reported_unit !== undefined && c.reported_unit !== '' ? parseFloat(c.reported_unit) : repBaht;
+    const f = v => v.toLocaleString('en-US', {minimumFractionDigits: dp, maximumFractionDigits: dp});
+    adjParts.push(`กำไรสุทธิปรับปรุง ${c.definition.startsWith('คำนวณเอง') ? '(คำนวณเอง ไม่ใช่ตัวเลขของบริษัท: ไม่รวมกำไร/ขาดทุน FX)' : '(นิยามบริษัท)'} ${f(cv)} ${unit} เทียบที่รายงาน ${f(rep)} · YoY ${fp(yv != null && yv > 0 ? (cv - yv) / yv * 100 : null)} · QoQ ${fp(qv != null && qv > 0 ? (cv - qv) / qv * 100 : null)}`);
+  });
+  const adjNoneRow = adjNone(sym);
+  const adjTxt = adjParts.length ? adjParts.join(' · ') : (adjNoneRow ? `ไม่มีตัวเลข: ${adjNoneRow.definition}` : '');
   const b3 = a.ex ? `${esc(a.ex.note)} <span class="sub">[${esc(a.ex.source_doc)} หน้า ${esc(a.ex.page)}]</span>` : 'ยังไม่มีสรุปจาก MD&amp;A';
   const exec = el('div', 'card exec',
     `<h2><span class="badge ${a.verdict[1]}">${a.verdict[0]}</span> สรุปสำหรับผู้บริหาร · ${esc(a.cur.period)}</h2><ul>` +
@@ -320,6 +347,7 @@ function renderDetail(sym) {
   const grid = el('div', 'detail');
   const left = el('div', 'nums');
   const dec = Math.max(...L.map(r => r.revenue)) / 1000 >= 10000 ? 0 : 1;  // หุ้นใหญ่แสดงเต็มล้านบาท ให้ตารางไม่กว้างเกินจอ
+  const mnote = a.cur.mapping_note || '';  // หมายเหตุการจับคู่บรรทัดงบ (เช่น หุ้นเดินเรือ)
   const n1 = v => (v / 1000).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
   const q4 = r => r.basis.startsWith('คำนวณ');
   const th = extra => `<tr><th>ล้านบาท</th>${L.map(r => `<th title="${esc(r.period + ' · สิ้นสุด ' + r.period_end + ' · ' + (q4(r) ? 'Q4 ไม่มีงบ 3 เดือน คำนวณจาก ' : 'ที่มา ') + r.source_doc + ' · ดึงเมื่อ ' + r.fetched_date)}">${esc(r.period)}${q4(r) ? '*' : ''}</th>`).join('')}${extra}</tr>`;
@@ -350,21 +378,34 @@ function renderDetail(sym) {
     ['%INTEREST/EBIT', 'ต้นทุนทางการเงิน', r => r.finance_cost, 'EBIT', r => r.ebit],
     ['%TAX/EBT', 'ภาษีเงินได้', r => r.tax, 'กำไรก่อนภาษี (EBT)', r => r.ebt],
   ];
-  // กำไรสุทธิปรับปรุง (นิยามของบริษัท จาก MD&A) ล้านบาท ไม่มีทศนิยม ไตรมาสที่ไม่มีตัวเลขเต็มแสดง –
-  const adjV = r => { const a = adjOf(sym, r.period); return a ? parseFloat(a.adj_net_profit_mb) : null; };
-  const adjLine = () => {
-    if (!L.some(r => adjV(r) != null)) return '';
+  // กำไรสุทธิปรับปรุง (นิยามของบริษัท จาก MD&A) แสดงทุกหุ้นเสมอ: มีตัวเลขเต็ม = แสดงค่า, สกุลอื่นที่ไม่ใช่บาท = แยกบรรทัดตามสกุล, ไม่เปิดเผย = – พร้อมเหตุผล
+  const adjRow = (unit, label, dp) => {
+    const val = r => { const x = adjOf(sym, r.period, unit); return x ? parseFloat(x.adj_net_profit_mb) : null; };
+    const fmtv = v => v.toLocaleString('en-US', {minimumFractionDigits: dp, maximumFractionDigits: dp});
     const ch = (cr, pr, lab) => {
-      const c = adjV(cr), p = pr && adjV(pr);
-      if (!pr || c == null || p == null) return [`<td${T(`%${lab}: ไม่มีตัวเลขกำไรปรับปรุงของ ${!pr ? 'ไตรมาสเปรียบเทียบ' : (c == null ? cr.period : pr.period)}`)}>–</td>`];
+      const c = val(cr), p = pr && val(pr);
+      if (!pr || c == null || p == null) return `<td${T(`%${lab}: ไม่มีตัวเลขกำไรปรับปรุงของ ${!pr ? 'ไตรมาสเปรียบเทียบ' : (c == null ? cr.period : pr.period)}`)}>–</td>`;
       const v = p > 0 ? (c - p) / p * 100 : null;
-      return [`<td class="${cls(v)}"${T(`%${lab} กำไรปรับปรุง = (${cr.period} − ${pr.period}) ÷ ${pr.period} = (${c.toLocaleString('en-US')} − ${p.toLocaleString('en-US')}) ÷ ${p.toLocaleString('en-US')} = ${fp(v)} (คำนวณจากตัวเลขที่ปัดเป็นล้านบาท อาจต่างจาก % ที่บริษัทรายงาน ±0.1)`)}>${v == null ? 'n/m' : fp(v)}</td>`];
+      return `<td class="${cls(v)}"${T(`%${lab} กำไรปรับปรุง = (${cr.period} − ${pr.period}) ÷ ${pr.period} = (${fmtv(c)} − ${fmtv(p)}) ÷ ${fmtv(p)} = ${fp(v)} (คำนวณจากตัวเลขกำไรปรับปรุงในแถวนี้ ซึ่งปัดเป็นหน่วยเต็ม อาจต่างจาก % ที่บริษัทรายงาน ±0.1)`)}>${v == null ? 'n/m' : fp(v)}</td>`;
     };
-    const cell = r => { const a = adjOf(sym, r.period), v = adjV(r);
-      if (v == null) return `<td${T(`${r.period}: ยังไม่มีตัวเลขกำไรปรับปรุงที่ระบุเต็มจำนวนใน MD&A (มีเฉพาะกราฟปัดเป็นพันล้านบาท) ไม่แสดงเพื่อไม่ให้เดา`)}>–</td>`;
-      const diff = v - r.net_profit / 1000;
-      return `<td${T(`กำไรสุทธิปรับปรุง ${r.period} = ${v.toLocaleString('en-US')} ล้านบาท · กำไรที่รายงาน ${n1(r.net_profit)} → ส่วนต่าง ${diff >= 0 ? '+' : '−'}${Math.abs(diff).toLocaleString('en-US', {maximumFractionDigits: 0})} · ${a.definition} · ที่มา ${a.source_doc} หน้า ${a.page}`)}>${v.toLocaleString('en-US')}</td>`; };
-    return `<tr class="t adj"><td>NET PROFIT (ปรับปรุง)²</td>${L.map(cell).join('')}${ch(a.cur, a.py, 'YoY')}${ch(a.cur, a.pq, 'QoQ')}</tr>`;
+    const cell = r => {
+      const x = adjOf(sym, r.period, unit), v = val(r);
+      if (v == null) {
+        const none = adjNone(sym);
+        return `<td${T(none ? `${r.period}: ${none.definition} · ไม่มีตัวเลขของไตรมาสนี้ใน MD&A ที่มี จึงยังไม่แสดง` : `${r.period}: ยังไม่มีตัวเลขกำไรปรับปรุงที่ระบุเต็มจำนวนใน MD&A ไม่แสดงเพื่อไม่ให้เดา`)}>–</td>`;
+      }
+      const rep = x.reported_unit !== undefined && x.reported_unit !== '' ? parseFloat(x.reported_unit) : r.net_profit / 1000;
+      const diff = v - rep;
+      return `<td${T(`กำไรสุทธิปรับปรุง ${r.period} = ${fmtv(v)} ${unit} · กำไรที่รายงาน (หน่วยเดียวกัน) ${fmtv(rep)} → ส่วนต่าง ${diff >= 0 ? '+' : '−'}${fmtv(Math.abs(diff))} · ${x.definition} · ที่มา ${x.source_doc} หน้า ${x.page}`)}>${fmtv(v)}</td>`;
+    };
+    const selfCalc = adjRows.some(x => x.symbol === sym && adjUnit(x) === unit && x.adj_net_profit_mb !== '' && x.definition.startsWith('คำนวณเอง'));
+    return `<tr class="t adj"><td>${label}${selfCalc ? ' [คำนวณเอง]' : ''}</td>${L.map(cell).join('')}${ch(a.cur, a.py, 'YoY')}${ch(a.cur, a.pq, 'QoQ')}</tr>`;
+  };
+  const adjLine = () => {
+    let out = '';
+    if (hasAdj(sym, 'ล้านบาท') || adjNone(sym)) out += adjRow('ล้านบาท', 'NET PROFIT (ปรับปรุง)²', 0);
+    if (hasAdj(sym, 'ล้านเหรียญสหรัฐ')) out += adjRow('ล้านเหรียญสหรัฐ', 'NET PROFIT (ปรับปรุง) USD²', 2);
+    return out;
   };
   const mval = (m, r) => m[4](r) > 0 ? m[2](r) / m[4](r) * 100 : null;
   const mtip = (m, r) => {
@@ -386,8 +427,8 @@ function renderDetail(sym) {
   const dcls = (m, cr, pr) => { if (!pr) return ''; const c = mval(m, cr), p = mval(m, pr); return (c == null || p == null || Math.abs(c - p) < 0.05) ? '' : cls(c - p); };
   left.innerHTML =
     `<div class="card tw"><table>${th('<th>%YoY</th><th>%QoQ</th>')}` +
-    line('SALE', r => r.revenue, true) + line('COGS', r => r.cogs) + line('GROSS PROFIT', r => r.gross_profit, true) +
-    line('SELLING', r => r.selling) + line('ADMIN', r => r.admin) +
+    line('SALE', r => r.revenue, true) + line('COGS', r => r.cogs, false, null, mnote) + line('GROSS PROFIT', r => r.gross_profit, true, null, mnote) +
+    line('SELLING', r => r.selling) + line('ADMIN', r => r.admin, false, null, mnote) +
     line('SG&A', sga, true, r => `SG&A ${r.period} = ค่าใช้จ่ายขาย + ค่าใช้จ่ายบริหาร = ${n1(r.selling)} + ${n1(r.admin)} = ${n1(sga(r))} ล้านบาท (คำนวณเอง)`) +
     line('EBIT¹', r => r.ebit, true, r => `EBIT ${r.period} = กำไรก่อนภาษี (EBT) + ต้นทุนทางการเงิน = ${n1(r.ebt)} + ${n1(r.finance_cost)} = ${n1(r.ebit)} ล้านบาท (คำนวณเอง บริษัทไม่ได้รายงาน)`) +
     line('INTEREST', r => r.finance_cost, false, null, 'ต้นทุนทางการเงิน') + line('EBT', r => r.ebt, true, null, 'กำไรก่อนภาษีเงินได้') +
@@ -417,9 +458,91 @@ function renderDetail(sym) {
   app.appendChild(grid);
 }
 
+/* ---------- หน้า 3: Earning call ---------- */
+function navBar(sym, active) {
+  const w = el('div', 'controls');
+  const back = el('button', 'btn', '← กลับหน้าสรุป'); back.type = 'button'; back.onclick = () => { location.hash = '#/'; };
+  w.appendChild(back);
+  const tabs = el('div', 'tabs');
+  [['detail', 'งบการเงิน', '#/' + sym], ['call', 'Earning call', '#/call/' + sym]].forEach(([k, l, h]) => {
+    const b = el('button', 'tab' + (k === active ? ' on' : ''), esc(l)); b.type = 'button'; b.onclick = () => { location.hash = h; }; tabs.appendChild(b);
+  });
+  w.appendChild(tabs);
+  return w;
+}
+const secOf = tm => { const p = String(tm).split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+const tlink = (call, tm) => !tm ? '' : (/youtube\.com|youtu\.be/.test(call.url)
+  ? `<a href="${esc(call.url)}&amp;t=${secOf(tm)}s" target="_blank" rel="noopener" title="เปิดวิดีโอที่นาที ${esc(tm)}">▶ ${esc(tm)}</a>`
+  : `<span class="sub">${esc(tm)}</span>`);
+const CHG = {'ลด': 'b-down', 'เพิ่ม': 'b-up', 'ใหม่': 'b-mix', 'คงเดิม': 'b-warn'};
+
+function renderCall(sym) {
+  const a = analyse(sym), c = callOf(sym);
+  document.getElementById('title').textContent = `${sym} · Earning call`;
+  app.innerHTML = '';
+  app.appendChild(navBar(sym, 'call'));
+  if (!c) {
+    document.getElementById('subtitle').textContent = `${a.cur.name} · ยังไม่มีข้อมูล earning call ในระบบ`;
+    app.appendChild(el('div', 'card', `<h2>ยังไม่มีสรุป earning call ของ ${esc(sym)}</h2><div>ต้องดาวน์โหลดเอกสารมาไว้ที่ <code>data/raw/</code> ก่อน แล้วให้ผู้ช่วยสรุป:</div><ul>` +
+      `<li><b>จำเป็น:</b> transcript ฉบับเต็มของ earning call / Opportunity Day งวด ${esc(a.cur.period)} (มีช่วง Q&amp;A) ตั้งชื่อ <code>${esc(sym)}_Q3-2026_CALL.pdf</code> (หรือ .docx / .md)</li>` +
+      `<li><b>แนะนำ:</b> สไลด์ที่นำเสนอ <code>${esc(sym)}_Q3-2026_SLIDES.pdf</code> และ transcript ไตรมาสก่อน เพื่อเทียบการเปลี่ยน guidance</li>` +
+      `<li><b>จำเป็น:</b> จดลิงก์ต้นทางและวันที่ลง <code>output/earning_call_sources.csv</code></li></ul>`));
+    return;
+  }
+  const call = c.call;
+  document.getElementById('subtitle').textContent = `${a.cur.name} · ${call.title} · เผยแพร่ ${call.published}`;
+  const sameP = c.period === a.cur.period;
+  const head = el('div', 'card', `<h2><span class="badge ${esc(c.verdict.badge)}">${esc(c.verdict.label)}</span> สรุป earning call ${esc(c.period)}</h2>` +
+    `<div>${esc(c.verdict.summary)}</div>` +
+    `<div class="tw" style="padding:6px 0 0"><table class="gt"><tr><th>ส่วน</th><th>ป้าย</th><th>เหตุผล</th><th>ฟัง</th></tr>` +
+    c.verdict.parts.map(p => `<tr><td>${esc(p.name)}</td><td><span class="badge ${esc(p.badge)}">${esc(p.label)}</span></td><td>${esc(p.why)}</td><td>${tlink(call, p.t)}</td></tr>`).join('') + `</table></div>` +
+    `<div class="sub" style="margin-top:6px">ที่มา: <a href="${esc(call.url)}" target="_blank" rel="noopener">${esc(call.title)}</a> · ${esc(call.kind)}${sameP ? '' : ' · <b>งวดของ call ไม่ตรงกับงบล่าสุด ' + esc(a.cur.period) + '</b>'}</div>`);
+
+  const gsec = el('div', 'card', `<h2>ไกด์ไลน์ที่ผู้บริหารให้</h2><div class="tw" style="padding:0"><table class="gt"><tr><th>รายการ</th><th>ค่า</th><th>เทียบงวดก่อน</th><th>หมายเหตุ</th><th>ที่มา</th></tr>` +
+    c.guidance.map(g => `<tr><td>${esc(g.item)}</td><td><b>${esc(g.value)}</b></td><td><span class="chg ${CHG[g.change] || 'b-warn'}">${esc(g.change)}</span></td><td>${esc(g.note)}</td><td class="sub">${esc(g.source)}</td></tr>`).join('') + `</table></div>`);
+
+  const hl = el('div', 'card', `<h2>ประเด็นสำคัญจากการนำเสนอ</h2><ul style="margin:0;padding-left:18px">` +
+    c.highlights.map(h => `<li>${esc(h.text)} ${tlink(call, h.t)}</li>`).join('') + `</ul>`);
+
+  const fm = a.m;
+  const fin = el('div', 'card', `<h2><span class="badge ${a.verdict[1]}">${a.verdict[0]}</span> งบล่าสุด ${esc(a.cur.period)} ดีหรือแย่อย่างไร</h2>` +
+    `<div>รายได้ <b class="${cls(fm.revY)}">${fp(fm.revY)}</b> YoY / <b class="${cls(fm.revQ)}">${fp(fm.revQ)}</b> QoQ · กำไรสุทธิ <b class="${cls(fm.npY)}">${fp(fm.npY)}</b> YoY / <b class="${cls(fm.npQ)}">${fp(fm.npQ)}</b> QoQ (ตัวเลขจากตารางหน้า "งบการเงิน" ใช้ยอดที่รายงาน)</div>` +
+    `<ul style="margin:6px 0 0;padding-left:18px">${c.financial_view.points.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` +
+    `<div class="sub" style="margin-top:6px"><a href="#/${esc(sym)}">ดูตารางงบและกราฟทั้งหมด ›</a></div>`);
+
+  const qa = c.qa, topics = [...new Set(qa.map(x => x.topic))];
+  const qbox = el('div', 'card qa');
+  qbox.innerHTML = `<h2>คำถาม-คำตอบทั้งหมด <span class="sub" id="qacnt"></span></h2><div class="sub">สรุปด้วยคำของเรา ไม่ใช่ข้อความถอดคำต่อคำ กด ▶ เพื่อฟังเสียงจริงตรงนาทีนั้น · transcript มี ${esc(call.transcript_questions)} คำถาม</div>`;
+  const bar = el('div', 'controls');
+  const si = el('input'); si.type = 'search'; si.placeholder = 'ค้นหาในคำถาม/คำตอบ';
+  const ts = el('select'); ts.setAttribute('aria-label', 'หัวข้อ');
+  [['', 'ทุกหัวข้อ'], ...topics.map(x => [x, x])].forEach(([v, l]) => { const o = el('option', null, esc(l)); o.value = v; ts.appendChild(o); });
+  bar.appendChild(si); bar.appendChild(ts);
+  const open = el('button', 'btn', 'เปิด/ปิดทั้งหมด'); open.type = 'button'; bar.appendChild(open);
+  qbox.appendChild(bar);
+  const list = el('div'); qbox.appendChild(list);
+  function drawQA() {
+    const kw = si.value.trim().toLowerCase();
+    const f = qa.filter(x => (!ts.value || x.topic === ts.value) && (!kw || (x.q + x.a + x.topic).toLowerCase().includes(kw)));
+    qbox.querySelector('#qacnt').textContent = `(แสดง ${f.length} / ${qa.length} ข้อ)`;
+    list.innerHTML = f.length ? f.map(x => `<details><summary>Q${x.n} · ${esc(x.topic)} <span class="meta">${tlink(call, x.t)}</span></summary><div class="body">` +
+      `<p><b>คำถาม</b> <span class="sub">(${esc(x.asker)})</span><br>${esc(x.q)}</p><p><b>คำตอบ</b> <span class="sub">(${esc(x.answerer)})</span><br>${esc(x.a)}</p>` +
+      (x.flag ? `<span class="flag">หมายเหตุ: ${esc(x.flag)}</span>` : '') + `</div></details>`).join('') : '<div class="empty">ไม่พบคำถามตามเงื่อนไข</div>';
+  }
+  si.oninput = drawQA; ts.onchange = drawQA;
+  open.onclick = () => { const ds = [...list.querySelectorAll('details')], any = ds.some(d => !d.open); ds.forEach(d => { d.open = any; }); };
+  drawQA();
+
+  const cav = el('div', 'card', `<h2>ข้อควรรู้</h2><ul style="margin:0;padding-left:18px">${c.caveats.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+  const wrap = el('div', 'stack');
+  [head, gsec, fin, hl, qbox, cav].forEach(x => wrap.appendChild(x));
+  app.appendChild(wrap);
+}
+
 function route() {
   const h = location.hash.replace(/^#\/?/, '');
-  if (h && bySym[h]) renderDetail(h); else renderSummary();
+  if (h.startsWith('call/') && bySym[h.slice(5)]) renderCall(h.slice(5));
+  else if (h && bySym[h]) renderDetail(h); else renderSummary();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);

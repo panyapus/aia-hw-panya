@@ -20,6 +20,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "output"
+
+
+def raw_file(sym, name):
+    """ไฟล์ดิบของหุ้น: ค้นใต้ data/raw/<SYM>/ ทุกระดับ (เช่น <SYM>/Financial Statement/, <SYM>/Earnings Call/) แล้วค่อยค้น data/raw/ (แบบเดิมไม่แยกโฟลเดอร์)"""
+    base = RAW / sym
+    found = sorted(base.rglob(name)) if base.exists() else []
+    if found:
+        return found[0]
+    if (RAW / name).exists():
+        return RAW / name
+    return base / name
+
+
+def raw_glob(sym, pattern):
+    """ไฟล์ดิบของหุ้นที่ตรงรูปแบบ ทั้งใต้โฟลเดอร์บริษัท (ทุกระดับ) และโฟลเดอร์รวม"""
+    base = RAW / sym
+    return sorted({*(base.rglob(pattern) if base.exists() else []), *RAW.glob(pattern)})
+
+
 FETCHED = "2026-11-02"
 NEWS_URL = "https://www.set.or.th/th/market/news-and-alert/news"
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
@@ -81,7 +100,7 @@ F45_H1 = {"ITC": {"26": 1715367, "25": 1372826}, "TRUE": {"26": 13142849, "25": 
 
 FIELDS = ["symbol", "name", "sector", "period", "period_end", "basis", "revenue", "cogs", "gross_profit",
           "other_income", "selling", "admin", "finance_cost", "ebt", "ebit", "tax", "net_profit",
-          "unit", "source_doc", "source_url", "fetched_date", "sector_source"]
+          "unit", "source_doc", "source_url", "fetched_date", "sector_source", "mapping_note"]
 
 
 def sheet_rows(zf, sheet_name):
@@ -143,6 +162,30 @@ def close(a, b, tol=1.5):
     return abs(a - b) <= tol
 
 
+def load_calls(folder):
+    """สรุป earning call ต่อหุ้น (ไฟล์ JSON ที่ AI สรุปจาก transcript และผ่าน scripts/check_call.py)"""
+    out = []
+    for f in sorted(Path(folder).glob("*.json")):
+        out.append(json.loads(f.read_text(encoding="utf-8")))
+    print(f"earning call: {len(out)} หุ้น ({', '.join(c['symbol'] for c in out) or 'ไม่มี'})")
+    return out
+
+
+def report_adj_coverage(symbols, adj):
+    """ทุกหุ้นใน dashboard ต้องมีบรรทัดกำไรปรับปรุง: มีตัวเลข / แยกสกุลเงิน / หรือระบุว่าไม่เปิดเผย ถ้าขาดให้เตือน"""
+    for sym in symbols:
+        mine = [a for a in adj if a["symbol"] == sym]
+        have = [a for a in mine if a["adj_net_profit_mb"] != ""]
+        none = [a for a in mine if a["adj_net_profit_mb"] == ""]
+        if have:
+            units = sorted({a.get("unit") or "ล้านบาท" for a in have})
+            print(f"กำไรปรับปรุง {sym}: {len(have)} ไตรมาส ({', '.join(units)})")
+        elif none:
+            print(f"กำไรปรับปรุง {sym}: บริษัทไม่เปิดเผย (แสดง – พร้อมเหตุผล)")
+        else:
+            print(f"คำเตือน {sym}: ยังไม่ได้ตรวจกำไรปรับปรุงใน MD&A ให้เพิ่มลง adjusted_profit.csv (ตัวเลข หรือแถวว่างเมื่อไม่เปิดเผย)")
+
+
 def main():
     out_rows = []
     dup_checked = {}
@@ -150,9 +193,9 @@ def main():
     for sym, info in STOCKS.items():
         obs = {}  # period -> (values, source_doc, own)
         for tag, kind, sheet, periods in SPEC[sym]:
-            zpath = RAW / f"{sym}_{tag}_FS.zip"
+            zpath = raw_file(sym, f"{sym}_{tag}_FS.zip")
             if not zpath.exists():
-                sys.exit(f"ไม่พบไฟล์ {zpath.name} ใน data/raw/")
+                sys.exit(f"ไม่พบไฟล์ {zpath.name} ใน data/raw/{sym}/ หรือ data/raw/")
             with zipfile.ZipFile(zpath) as zf:
                 inner = zipfile.ZipFile(io.BytesIO(zf.read("FINANCIAL_STATEMENTS.XLSX")))
                 rows = sheet_rows(inner, sheet)
@@ -220,7 +263,7 @@ def main():
                 "period_end": f"20{yy}-{ends[q]}", "basis": "คำนวณ (ปี − 9 เดือน)" if q == "Q4" else "งบ 3 เดือน",
                 **{k: int(round(v)) for k, v in d.items()},
                 "unit": "พันบาท", "source_doc": src, "source_url": NEWS_URL, "fetched_date": FETCHED,
-                "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)",
+                "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)", "mapping_note": "",
             })
     out_rows.sort(key=lambda r: (r["symbol"], r["period_end"]))
     OUT.mkdir(exist_ok=True)
@@ -235,6 +278,8 @@ def main():
     adj = list(csv.DictReader(open(OUT / "adjusted_profit.csv", encoding="utf-8-sig")))
     reported = {(r["symbol"], r["period"]): r["net_profit"] / 1000 for r in out_rows}
     for a in adj:
+        if a["adj_net_profit_mb"] == "" or a.get("unit", "ล้านบาท") != "ล้านบาท":
+            continue   # แถวที่บริษัทไม่เปิดเผย หรือเป็นสกุลเงินอื่น ไม่ตรวจกับกำไรเป็นบาท
         key = (a["symbol"], a["period"])
         if key not in reported:
             sys.exit(f"adjusted_profit.csv: ไม่มีงวด {key} ใน data.csv")
@@ -243,9 +288,11 @@ def main():
         if float(a["adj_net_profit_mb"]) < reported[key] - 5:
             # เป็นไปได้เมื่อรายการพิเศษที่ตัดออกเป็นกำไร (เช่น ผลบวกครั้งเดียว) จึงไม่ถือว่าผิด แต่ให้ตรวจกับ MD&A
             print(f"หมายเหตุ {key}: กำไรปรับปรุงต่ำกว่ากำไรที่รายงาน ให้ตรวจว่าตรงกับ MD&A (รายการพิเศษที่ตัดออกเป็นกำไร)")
+    report_adj_coverage(sorted({r["symbol"] for r in out_rows}), adj)
     print(f"ตรวจกำไรสุทธิปรับปรุง {len(adj)} รายการ (ที่มีรายการที่ตัดออก: รายงาน + ตัดออก = ปรับปรุงตรงทุกรายการ)")
     tpl = (ROOT / "scripts" / "dashboard_template.html").read_text(encoding="utf-8")
-    payload = json.dumps({"rows": out_rows, "notes": notes, "adj": adj}, ensure_ascii=False)
+    calls = load_calls(OUT / "earning_calls")
+    payload = json.dumps({"rows": out_rows, "notes": notes, "adj": adj, "calls": calls}, ensure_ascii=False)
     (OUT / "dashboard.html").write_text(tpl.replace("/*__DATA__*/null", payload), encoding="utf-8")
     print("เขียน output/dashboard.html")
 

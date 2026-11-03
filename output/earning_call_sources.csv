@@ -1,0 +1,7 @@
+symbol,period,doc_type,title,published,source_url,local_file,note,fetched_date
+ITC,Q3'26,transcript (คำบรรยายอัตโนมัติ YouTube),SET Opportunity Day ITC Q3/2026,2026-10-31,https://www.youtube.com/watch?v=ezlxkuzA2Q8,data/raw/ITC/Earnings Call/ITC Earnings Call (OPPDAY) Q32026 บมจ. ไอ-เทล คอร์ปอเรชั่น.md,ผู้ใช้บันทึกด้วย Web Clipper ไฟล์ดิบไม่เผยแพร่,2026-11-03
+ITC,Q3'26,สไลด์ Opportunity Day,ITC Opp Day Q3/2026,2026-10-29,,data/raw/ITC/Earnings Call/oppday-20261029-0909002297655-Q3_2026-ITC.pdf,ใช้ตรวจตัวเลขที่ถอดเสียงไม่ชัด,2026-11-03
+TRUE,Q2'26,transcript (คำบรรยายอัตโนมัติ YouTube),SET Opportunity Day TRUE Q2/2026,2026-08-06,https://www.youtube.com/watch?v=S42gaTDXcbw,data/raw/TRUE/Earnings Call/TRUE_Q2-2026_CALL.md,ภาษาอังกฤษ ใช้เป็น call ล่าสุดที่มีข้อความของ TRUE,2026-11-03
+TRUE,Q2'26,สไลด์ผลประกอบการ,TRUE Q2/2026 results,2026-08-06,,data/raw/TRUE/Earnings Call/TRUE_Q2-2026_SLIDES.pdf,มีหน้า Revised Guidance 2026 (หน้า 18),2026-11-03
+TRUE,Q3'26,transcript (คำบรรยายอัตโนมัติ YouTube),SET Opportunity Day TRUE Q3/2026,2026-11-03,https://www.youtube.com/watch?v=95BlB7xC9rc,data/raw/TRUE/Earnings Call/TRUE_Q3-2026_CALL.md,ไฟล์ที่ได้ไม่มีข้อความ transcript (มีแต่หัวเรื่อง) ต้องโหลดใหม่เมื่อ YouTube สร้างคำบรรยายแล้ว,2026-11-03
+TRUE,Q3'26,สไลด์ผลประกอบการ,TRUE Q3/2026 results,2026-11-03,,data/raw/TRUE/Earnings Call/TRUE_Q3-2026_SLIDES.pdf,ไม่มีหน้า guidance (MD&A Q3 หน้า 8 ระบุคงเป้าเดิม),2026-11-03
