@@ -125,6 +125,39 @@ def fs_rows(sym):
     return out
 
 
+# จำนวนหุ้นถัวเฉลี่ยของ TU (ล้านหุ้น) จากหมายเหตุงบ Q3/69: 9 เดือนปี 69 = 3,855.094 ตรงกับเงินปันผลระหว่างกาล ส.ค. 2026 (1,542.0 ÷ 0.40)
+# และเงินปันผล ส.ค. 2025 / เม.ย. 2026 (1,349.3 ÷ 0.35 = 3,855.1) จึงถือว่าจำนวนหุ้นคงที่ตั้งแต่ ส.ค. 2025 ถึง ก.ย. 2026 (Q4/25–Q3/26)
+# ก่อนหน้านั้นจำนวนหุ้นเปลี่ยน (ค่าเฉลี่ย 9 เดือนปี 68 = 4,005.8) จึงไม่แสดงตัวหารของไตรมาสเหล่านั้น
+TU_SHARES = {"Q4'25": 3855.1, "Q1'26": 3855.1, "Q2'26": 3855.1, "Q3'26": 3855.1}
+# EPS จากแบบ F45 ของ Q3/69 (ค่าล่าสุดที่บริษัทรายงาน)
+EPS_F45 = {("PSL", "Q3'26"): 0.4889, ("TU", "Q3'26"): 0.35}
+
+
+def build_per_share(rows, ss):
+    """EPS รายไตรมาสของ PSL/TU: Q3/26 จาก F45, ที่เหลือจาก SETSMART (TU ทศนิยม 2 ตำแหน่ง จึงไม่ใช้อนุมานจำนวนหุ้น)"""
+    out = []
+    for r in rows:
+        sym, per = r["symbol"], r["period"]
+        if (sym, per) in EPS_F45:
+            e, src, basis = EPS_F45[(sym, per)], f"{sym}_Q3-2026_F45.pdf", "แบบ F45"
+        else:
+            d = ss[(STOCKS[sym]["ss"], r["period_end"])]
+            e, src, basis = d.get("Basic Earnings (Loss) Per Share (Baht/Share)"), "SETSMART (ไฟล์ในเครื่อง ไม่เผยแพร่)", "SETSMART (ไตรมาส)"
+        if e is None:
+            continue
+        if sym == "PSL":   # EPS ทศนิยม 4–5 ตำแหน่ง ใช้ กำไรสุทธิ ÷ EPS เป็นจำนวนหุ้นถัวเฉลี่ยของไตรมาสนั้น (ตรงกับหมายเหตุงบ Q3/69: 1,484.7 ล้านหุ้น)
+            shares = f"{r['net_profit'] / e / 1000:.1f}" if abs(e) > 1e-9 else ""
+        else:
+            shares = f"{TU_SHARES[per]:.1f}" if per in TU_SHARES else ""
+        out.append({"symbol": sym, "period": per, "eps": f"{e:.6f}", "eps_dp": "2" if sym == "TU" else "4", "shares_mn": shares,
+                    "shares_basis": ("กำไรสุทธิ ÷ EPS = จำนวนหุ้นถัวเฉลี่ยของไตรมาสนั้น (PSL ซื้อหุ้นคืน จำนวนหุ้นจึงเปลี่ยนตามไตรมาส)" if sym == "PSL"
+                                     else "หมายเหตุงบ Q3/69 ร่วมกับเงินปันผล: จำนวนหุ้นคงที่ที่ 3,855.1 ล้านหุ้นตั้งแต่ ส.ค. 2025 ไตรมาสก่อนหน้าจำนวนหุ้นเปลี่ยนจึงไม่แสดง"),
+                    "eps_implied_shares_mn": f"{r['net_profit'] / e / 1000:.1f}" if abs(e) > 1e-9 else "",
+                    "basis": basis + (" (ปัดทศนิยม 2 ตำแหน่ง)" if sym == "TU" and basis != "แบบ F45" else ""),
+                    "source_doc": src, "fetched_date": FETCH})
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--setsmart", default=os.environ.get("SETSMART_CSV"))
@@ -177,6 +210,7 @@ def main():
                 "sector_source": "ยังไม่ยืนยัน (รอผู้เรียนตรวจจาก set.or.th)", "mapping_note": NOTE[sym],
             })
 
+    ps_priv = build_per_share(rows, ss)
     pub = list(csv.DictReader(open(b.OUT / "data.csv", encoding="utf-8-sig")))
     num = ("revenue", "cogs", "gross_profit", "other_income", "selling", "admin", "finance_cost", "ebt", "ebit", "tax", "net_profit")
     for r in pub:
@@ -207,7 +241,9 @@ def main():
     b.report_adj_coverage(sorted({r["symbol"] for r in allrows}), adj)
     tpl = (ROOT / "scripts" / "dashboard_template.html").read_text(encoding="utf-8")
     calls = b.load_calls(b.OUT / "earning_calls") + (b.load_calls(PRIV / "earning_calls") if (PRIV / "earning_calls").exists() else [])
-    payload = json.dumps({"rows": allrows, "notes": notes, "adj": adj, "calls": calls}, ensure_ascii=False)
+    ps_all = list(csv.DictReader(open(b.OUT / "per_share.csv", encoding="utf-8-sig"))) + ps_priv
+    divs = list(csv.DictReader(open(b.OUT / "dividends.csv", encoding="utf-8-sig"))) + read(PRIV / "dividends_private.csv")
+    payload = json.dumps({"rows": allrows, "notes": notes, "adj": adj, "calls": calls, "ps": ps_all, "div": divs}, ensure_ascii=False)
     (PRIV / "dashboard_full.html").write_text(tpl.replace("/*__DATA__*/null", payload), encoding="utf-8")
     print(f"เขียน data/private/data_full.csv {len(allrows)} แถว และ data/private/dashboard_full.html (ไม่ถูก commit)")
 

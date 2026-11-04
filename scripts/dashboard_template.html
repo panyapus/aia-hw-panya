@@ -108,8 +108,11 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 </div>
 <script>
 const DATA = /*__DATA__*/null;
-const rows = DATA.rows, notes = DATA.notes, adjRows = DATA.adj || [], calls = DATA.calls || [];
-const callOf = sym => calls.find(c => c.symbol === sym);
+const rows = DATA.rows, notes = DATA.notes, adjRows = DATA.adj || [], calls = DATA.calls || [], psRows = DATA.ps || [], divRows = DATA.div || [];
+const pOrd = p => { const m = /Q(\d)'(\d\d)/.exec(p); return m ? parseInt(m[2]) * 10 + parseInt(m[1]) : 0; };
+const callsOf = sym => calls.filter(c => c.symbol === sym).sort((x, y) => pOrd(y.period) - pOrd(x.period));
+const callPick = {};   // หุ้นที่ผู้ใช้เลือกดู call ย้อนหลัง
+const callOf = sym => { const l = callsOf(sym); return l.find(c => c.period === callPick[sym]) || l[0]; };
 const bySym = {};
 rows.forEach(r => (bySym[r.symbol] = bySym[r.symbol] || []).push(r));
 Object.values(bySym).forEach(a => a.sort((x, y) => x.period_end.localeCompare(y.period_end)));
@@ -425,6 +428,36 @@ function renderDetail(sym) {
     return (c == null || p == null) ? 'n/m' : (Math.abs(c - p) < 0.05 ? '0.0' : signed(c - p));
   };
   const dcls = (m, cr, pr) => { if (!pr) return ''; const c = mval(m, cr), p = mval(m, pr); return (c == null || p == null || Math.abs(c - p) < 0.05) ? '' : cls(c - p); };
+  // ตัวเลขต่อหุ้น: Revenue per Share, EPS, DPS (แยกจาก P&L และ Key Metrics)
+  const psOf = r => psRows.find(x => x.symbol === sym && x.period === r.period);
+  const dvOf = r => divRows.find(x => x.symbol === sym && x.period === r.period);
+  const rpsV = r => { const p = psOf(r); const sh = p ? parseFloat(p.shares_mn) : NaN; return isFinite(sh) && sh > 0 ? r.revenue / 1000 / sh : null; };
+  const epsV = r => { const p = psOf(r); return p ? parseFloat(p.eps) : null; };
+  const dpsV = r => { const d = dvOf(r); return d && d.dps !== '' ? parseFloat(d.dps) : null; };
+  const psTip = {
+    rps: r => { const p = psOf(r); return `Revenue per Share ${r.period} = SALE ÷ จำนวนหุ้น = ${n1(r.revenue)} ล้านบาท ÷ ${parseFloat(p.shares_mn).toLocaleString('en-US', {minimumFractionDigits: 1})} ล้านหุ้น = ${rpsV(r).toFixed(2)} บาท · ที่มาจำนวนหุ้น: ${p.shares_basis}`; },
+    eps: r => { const p = psOf(r), sh = parseFloat(p.shares_mn), im = parseFloat(p.eps_implied_shares_mn);
+      const dev = im && isFinite(sh) ? (im - sh) / sh * 100 : 0;
+      return `EPS ${r.period} = ${parseFloat(p.eps).toFixed(5)} บาท (กำไรต่อหุ้นขั้นพื้นฐานที่บริษัทรายงาน) · ${p.basis} · ที่มา ${p.source_doc}` +
+        (Math.abs(dev) > 0.5 && !String(p.basis).includes('ปัด') ? ` · หมายเหตุ: EPS ที่บริษัทรายงานต่ำ/สูงกว่า กำไรสุทธิ ÷ จำนวนหุ้นประมาณ ${Math.abs(dev).toFixed(1)}% (ไม่ได้ตรวจสาเหตุ ตัวเลขนี้คือค่าที่บริษัทรายงาน)` : ''); },
+    dps: r => { const d = dvOf(r); return `DPS ${r.period} = ${parseFloat(d.dps).toFixed(2)} บาทต่อหุ้น · ${d.event}${d.note ? ' · ' + d.note : ''} · ที่มา ${d.source_doc} · ผูกกับผลงวดที่ประกาศพร้อมงบ`; },
+  };
+  const psRow = (label, f, dp, kind) => {
+    const zero = (x, y) => kind === 'dps' && (x === 0 || y === 0);   // ปันผลเป็นศูนย์ในงวดใดงวดหนึ่ง เทียบ % ไม่มีความหมาย
+    const yo = a.py && f(a.py) != null && f(a.cur) != null && !zero(f(a.cur), f(a.py)) ? chg(f(a.cur), f(a.py)) : null, qo = a.pq && f(a.pq) != null && f(a.cur) != null && !zero(f(a.cur), f(a.pq)) ? chg(f(a.cur), f(a.pq)) : null;
+    const cell = r => { const v = f(r); return v == null
+      ? `<td${T(kind === 'dps' ? `${r.period}: ยังไม่ได้ตรวจเอกสารปันผลของไตรมาสนี้ จึงไม่แสดง` : `${r.period}: ไม่มีข้อมูลต่อหุ้นของไตรมาสนี้`)}>–</td>`
+      : `<td${T(psTip[kind](r))}>${v.toFixed(kind === 'eps' ? Math.min(dp, parseInt(psOf(r).eps_dp || dp)) : dp)}</td>`; };
+    const tipCh = (pr, lab) => !pr ? ' title="ไม่มีไตรมาสเปรียบเทียบ"' : (f(pr) == null || f(a.cur) == null) ? T(`%${lab}: ไม่มีตัวเลขของไตรมาสเปรียบเทียบ`)
+      : zero(f(a.cur), f(pr)) ? T(`%${lab}: ปันผลเป็น 0 ในงวดใดงวดหนึ่ง (ไม่มีการประกาศ) เทียบ % ไม่มีความหมาย (n/m)`)
+      : f(pr) <= 0 ? T(`%${lab}: ฐานเปรียบเทียบ (${pr.period}) = ${f(pr).toFixed(dp)} ≤ 0 จึงไม่แสดง % (n/m)`)
+      : T(`%${lab} ${label} = (${a.cur.period} − ${pr.period}) ÷ ${pr.period} = (${f(a.cur).toFixed(dp)} − ${f(pr).toFixed(dp)}) ÷ ${f(pr).toFixed(dp)} = ${fp((f(a.cur) - f(pr)) / f(pr) * 100)}`);
+    const show = (v, pr) => !pr || f(pr) == null || f(a.cur) == null ? '–' : (v == null ? 'n/m' : fp(v));
+    return `<tr><td>${label}</td>${L.map(cell).join('')}<td class="${cls(yo)}"${tipCh(a.py, 'YoY')}>${show(yo, a.py)}</td><td class="${cls(qo)}"${tipCh(a.pq, 'QoQ')}>${show(qo, a.pq)}</td></tr>`;
+  };
+  const psCard = () => psRows.some(x => x.symbol === sym)
+    ? `<div class="card tw"><table>${th('<th>%YoY</th><th>%QoQ</th>').replace('ล้านบาท', 'บาทต่อหุ้น')}` +
+      psRow('REVENUE/SHARE', rpsV, 2, 'rps') + psRow('EPS', epsV, 3, 'eps') + psRow('DPS', dpsV, 2, 'dps') + `</table></div>` : '';
   left.innerHTML =
     `<div class="card tw"><table>${th('<th>%YoY</th><th>%QoQ</th>')}` +
     line('SALE', r => r.revenue, true) + line('COGS', r => r.cogs, false, null, mnote) + line('GROSS PROFIT', r => r.gross_profit, true, null, mnote) +
@@ -432,7 +465,7 @@ function renderDetail(sym) {
     line('SG&A', sga, true, r => `SG&A ${r.period} = ค่าใช้จ่ายขาย + ค่าใช้จ่ายบริหาร = ${n1(r.selling)} + ${n1(r.admin)} = ${n1(sga(r))} ล้านบาท (คำนวณเอง)`) +
     line('EBIT¹', r => r.ebit, true, r => `EBIT ${r.period} = กำไรก่อนภาษี (EBT) + ต้นทุนทางการเงิน = ${n1(r.ebt)} + ${n1(r.finance_cost)} = ${n1(r.ebit)} ล้านบาท (คำนวณเอง บริษัทไม่ได้รายงาน)`) +
     line('INTEREST', r => r.finance_cost, false, null, 'ต้นทุนทางการเงิน') + line('EBT', r => r.ebt, true, null, 'กำไรก่อนภาษีเงินได้') +
-    line('TAX', r => r.tax, false, null, 'ภาษีเงินได้ (บวก = ค่าใช้จ่าย ลบ = รายได้ภาษี)') + line('NET PROFIT', r => r.net_profit, true, null, 'กำไรส่วนที่เป็นของบริษัทใหญ่') + adjLine() + `</table></div>` +
+    line('TAX', r => r.tax, false, null, 'ภาษีเงินได้ (บวก = ค่าใช้จ่าย ลบ = รายได้ภาษี)') + line('NET PROFIT', r => r.net_profit, true, null, 'กำไรส่วนที่เป็นของบริษัทใหญ่') + adjLine() + `</table></div>` + psCard() +
     `<div class="card tw"><table>${th('<th>YoY (จุด)</th><th>QoQ (จุด)</th>')}` +
     metricRows.map(m => {
       return `<tr><td>${m[0]}</td>${L.map(r => `<td${mtip(m, r).replace(/^ /, ' ')}>${fr(mval(m, r)).replace('–', 'n/m')}</td>`).join('')}` +
@@ -442,7 +475,7 @@ function renderDetail(sym) {
     [...new Set(L.map(r => r.source_doc + ' · ดึงเมื่อ ' + r.fetched_date))].map(s => `<li>${esc(s)}</li>`).join('') +
     `<li><a href="${esc(a.cur.source_url)}" target="_blank" rel="noopener">หน้าข่าวหลักทรัพย์ SET</a> (ค้นหาข่าวงบของ ${esc(sym)})</li>` +
     notes.filter(n => n.symbol === sym && n.topic !== 'สรุปผู้บริหาร').map(n => `<li><b>${esc(n.topic)} (${esc(n.period)}):</b> ${esc(n.note)} [${esc(n.source_doc)} หน้า ${esc(n.page)}]</li>`).join('') +
-    `</ul><div class="sub" style="margin-top:6px">² กำไรสุทธิปรับปรุง เป็นตัวเลขที่บริษัทเปิดเผยใน MD&A ตามนิยามของตนเอง (ITC ตัดค่าใช้จ่ายโครงการ Transformation, TRUE ตัดผลกระทบครั้งเดียวที่ไม่ใช่เงินสด) นิยามไม่เหมือนกันจึงเทียบข้ามหุ้นไม่ได้ ช่อง – = ยังไม่มีตัวเลขเต็มจำนวน · ¹ EBIT = กำไรก่อนภาษี + ต้นทุนการเงิน คำนวณเองจากงบ (รวมรายได้อื่นและส่วนแบ่งกำไร) · * Q4 ไม่มีงบ 3 เดือน คำนวณจากงบทั้งปี − งบ 9 เดือน (กำไรสุทธิตรงกับ F45) · sector: ${esc(a.cur.sector_source)}</div></details></div>`;
+    `</ul><div class="sub" style="margin-top:6px">³ ตัวเลขต่อหุ้น: REVENUE/SHARE = SALE ÷ จำนวนหุ้น, EPS = ค่าที่บริษัทรายงาน, DPS = ปันผลต่อหุ้นที่ประกาศพร้อมผลงวดนั้น (ปันผลประจำปีผูกกับไตรมาส 4) ช่อง – = ยังไม่มีเอกสารยืนยัน ชี้เมาส์ดูสูตรและที่มา · ² กำไรสุทธิปรับปรุง เป็นตัวเลขที่บริษัทเปิดเผยใน MD&A ตามนิยามของตนเอง (ITC ตัดค่าใช้จ่ายโครงการ Transformation, TRUE ตัดผลกระทบครั้งเดียวที่ไม่ใช่เงินสด) นิยามไม่เหมือนกันจึงเทียบข้ามหุ้นไม่ได้ ช่อง – = ยังไม่มีตัวเลขเต็มจำนวน · ¹ EBIT = กำไรก่อนภาษี + ต้นทุนการเงิน คำนวณเองจากงบ (รวมรายได้อื่นและส่วนแบ่งกำไร) · * Q4 ไม่มีงบ 3 เดือน คำนวณจากงบทั้งปี − งบ 9 เดือน (กำไรสุทธิตรงกับ F45) · sector: ${esc(a.cur.sector_source)}</div></details></div>`;
 
   const right = el('div', 'charts');
   right.innerHTML =
@@ -490,6 +523,14 @@ function renderCall(sym) {
     return;
   }
   const call = c.call;
+  const allCalls = callsOf(sym);
+  if (allCalls.length > 1) {
+    const w = el('div', 'controls'); w.appendChild(el('span', 'sub', 'เลือก call:'));
+    const sel = el('select'); sel.setAttribute('aria-label', 'เลือก earning call');
+    allCalls.forEach((x, i) => { const o = el('option', null, esc(x.period + (i === 0 ? ' (ล่าสุด)' : '') + ' · ' + x.call.published)); o.value = x.period; if (x.period === c.period) o.selected = true; sel.appendChild(o); });
+    sel.onchange = () => { callPick[sym] = sel.value; renderCall(sym); };
+    w.appendChild(sel); app.appendChild(w);
+  }
   document.getElementById('subtitle').textContent = `${a.cur.name} · ${call.title} · เผยแพร่ ${call.published}`;
   const sameP = c.period === a.cur.period;
   const head = el('div', 'card', `<h2><span class="badge ${esc(c.verdict.badge)}">${esc(c.verdict.label)}</span> สรุป earning call ${esc(c.period)}</h2>` +
