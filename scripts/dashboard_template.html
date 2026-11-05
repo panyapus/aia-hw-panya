@@ -74,6 +74,12 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 .gt td,.gt th{white-space:normal;text-align:left;vertical-align:top}
 .gt td:first-child,.gt th:first-child{position:static;min-width:170px}
 .chg{display:inline-block;border-radius:6px;padding:0 8px;font-size:12px;font-weight:600;white-space:nowrap}
+.thx{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+@media(max-width:800px){.thx{grid-template-columns:1fr}}
+.thx h3{margin:0 0 4px;font-size:14px}
+.thx ul{margin:0;padding-left:18px}.thx li{margin:0 0 8px}
+.thx .ev,.cl .ev{display:block;color:var(--mute);font-size:13px}
+.cl{margin:0;padding:0;list-style:none}.cl li{padding:8px 0;border-top:1px solid var(--line)}.cl li:first-child{border-top:0}
 .qa details{border:1px solid var(--line);border-radius:10px;background:var(--card);margin:6px 0;padding:8px 12px}
 .qa summary{cursor:pointer;font-weight:600}
 .qa summary .meta{font-weight:400;color:var(--mute);font-size:12px}
@@ -507,6 +513,7 @@ const secOf = tm => { const p = String(tm).split(':').map(Number); return p.leng
 const tlink = (call, tm) => !tm ? '' : (/youtube\.com|youtu\.be/.test(call.url)
   ? `<a href="${esc(call.url)}&amp;t=${secOf(tm)}s" target="_blank" rel="noopener" title="เปิดวิดีโอที่นาที ${esc(tm)}">▶ ${esc(tm)}</a>`
   : `<span class="sub">${esc(tm)}</span>`);
+const DIR = {'บวก': 'b-up', 'ลบ': 'b-down', 'ไม่แน่': 'b-warn'};
 const CHG = {'ลด': 'b-down', 'เพิ่ม': 'b-up', 'ใหม่': 'b-mix', 'คงเดิม': 'b-warn'};
 
 function renderCall(sym) {
@@ -575,8 +582,22 @@ function renderCall(sym) {
   drawQA();
 
   const cav = el('div', 'card', `<h2>ข้อควรรู้</h2><ul style="margin:0;padding-left:18px">${c.caveats.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+
+  // thesis / catalyst: แสดงเฉพาะเมื่อข้อมูลพอ (เกณฑ์เดียวกับ scripts/check_call.py) ไม่พอ = ไม่แสดงเลย
+  const tt = s => ` title="${esc(s)}"`;
+  const th = c.thesis, thOk = th && th.pillars && th.pillars.length >= 3 && th.risks && th.risks.length >= 2;
+  const catOk = Array.isArray(c.catalysts) && c.catalysts.length >= 1 && c.catalysts.some(x => !String(x.timing).startsWith('ไม่ระบุ'));
+  const thLi = x => `<li><b>${esc(x.point)}</b><span class="ev">${esc(x.evidence)} ${tlink(call, x.t)}</span><span class="ev"${tt(`ที่มา: ${x.source}`)}>ที่มา: ${esc(x.source)}</span></li>`;
+  const thesis = thOk ? el('div', 'card', `<h2>Thesis ที่ผู้บริหารสื่อสารใน call</h2><div>${esc(th.headline)}</div>` +
+    `<div class="thx"><div><h3>ข้อสนับสนุน</h3><ul>${th.pillars.map(thLi).join('')}</ul></div><div><h3>ความเสี่ยง / ข้อโต้แย้ง</h3><ul>${th.risks.map(thLi).join('')}</ul></div></div>` +
+    `<div class="sub" style="margin-top:6px">${esc(th.basis)} · ข้อสนับสนุนคือประเด็นที่ผู้บริหารหยิบมาเล่า ไม่ใช่การยืนยันว่าจะเกิดขึ้นจริง</div>`) : null;
+  const cats = catOk ? el('div', 'card', `<h2>Catalyst ที่ผู้บริหารกล่าวถึง</h2><ul class="cl">` +
+    c.catalysts.map(x => { const nd = String(x.timing).startsWith('ไม่ระบุ');
+      return `<li><span class="chg ${DIR[x.direction] || 'b-warn'}"${tt('ทิศทางต่อผลประกอบการ/ผู้ถือหุ้นตามที่ผู้บริหารสื่อสาร ไม่ใช่การคาดการณ์ราคาหุ้น')}>${esc(x.direction)}</span> <b>${esc(x.event)}</b>` +
+        `<span class="ev"><b>ช่วงเวลา:</b> <span class="${nd ? 'sub' : ''}">${esc(x.timing)}</span></span><span class="ev">${esc(x.impact)} ${tlink(call, x.t)}</span><span class="ev">ที่มา: ${esc(x.source)}</span></li>`; }).join('') +
+    `</ul><div class="sub" style="margin-top:6px">catalyst คือเหตุการณ์ที่ผู้บริหารพูดถึงเอง ช่วงเวลา "ไม่ระบุ" = ไม่มีวันที่ชัดเจนใน call · ไม่ใช่คำแนะนำการลงทุน</div>`) : null;
   const wrap = el('div', 'stack');
-  [head, gsec, fin, hl, qbox, cav].forEach(x => wrap.appendChild(x));
+  [head, gsec, thesis, cats, fin, hl, qbox, cav].forEach(x => { if (x) wrap.appendChild(x); });
   app.appendChild(wrap);
 }
 
